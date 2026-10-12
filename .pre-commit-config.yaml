@@ -1,0 +1,30 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff
+        args: [--config, backend/pyproject.toml, --fix]
+        files: ^backend/.*\.py$
+      - id: ruff-format
+        args: [--config, backend/pyproject.toml]
+        files: ^backend/.*\.py$
+  - repo: local
+    hooks:
+      - id: frontend-lint
+        name: frontend eslint
+        entry: npm run lint --prefix frontend
+        language: system
+        pass_filenames: false
+      - id: frontend-format
+        name: frontend prettier
+        entry: npm run format:check --prefix frontend
+        language: system
+        pass_filenames: false

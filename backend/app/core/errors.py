@@ -1,1 +1,1 @@
-﻿# Error handling placeholder.
+# Error handling placeholder.

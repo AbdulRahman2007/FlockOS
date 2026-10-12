@@ -1,1 +1,22 @@
-﻿{} 
+{
+  "appName": "POUKTRY",
+  "workspace": "Farm workspace",
+  "profileMenu": "Profile menu",
+  "mainNavigation": "Main navigation",
+  "nav": {
+    "home": "Home",
+    "farms": "Farms",
+    "flocks": "Flocks",
+    "daily": "Daily entry",
+    "more": "More"
+  },
+  "dashboard": {
+    "eyebrow": "Your farm overview",
+    "title": "Welcome to POUKTRY",
+    "description": "Your flock operations and records will appear here.",
+    "setupTitle": "Workspace ready for setup",
+    "setupDescription": "This app shell is ready for the first farm operations workflow."
+  },
+  "loading": "Loading page",
+  "notFound": "Page not found"
+}

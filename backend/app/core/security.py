@@ -1,1 +1,1 @@
-﻿# Security placeholder.
+# Security placeholder.

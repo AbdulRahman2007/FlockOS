@@ -1,6 +1,8 @@
 ﻿# Python
 __pycache__/
 *.py[cod]
+build/
+*.egg-info/
 .venv/
 venv/
 .pytest_cache/
@@ -12,6 +14,9 @@ node_modules/
 dist/
 coverage/
 .vite/
+.vitest/
+playwright-report/
+test-results/
 
 # Environment and secrets
 .env
@@ -31,3 +36,4 @@ Thumbs.db
 postgres-data/
 pgdata/
 .docker-data/
+.local/
