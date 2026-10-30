@@ -1,6 +1,6 @@
 # ADR 0001: Shared-schema tenant isolation
 
-- Status: Proposed for review
+- Status: Accepted for Phase 3 implementation; RLS remains a production evaluation item
 - Date: 2026-10-12
 
 ## Context

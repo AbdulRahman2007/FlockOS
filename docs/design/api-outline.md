@@ -30,7 +30,7 @@ Status: Design proposal. Role access follows docs/roles.md; all unlisted operati
 | PATCH /admin/tenants/{tenant_id} | Update tenant status/administrative fields; no billing actions | SA |
 | GET /tenant | Current tenant profile | O; other tenant roles only if fields are needed by allowed screens |
 | GET /users | Tenant users list | O |
-| POST /users/invitations | Invite user and assign role/farms | O; delivery depends on P2 confirmation |
+| POST /users/invitations | Invite user and assign role/farms | O; delivery integration pending |
 | PATCH /users/{user_id} | Change role, farm assignments, or deactivate | O |
 | GET /farms | Tenant farms filtered to role scope | O all; M assigned; W/A view |
 | POST /farms | Create farm | O |
@@ -105,8 +105,57 @@ auth, admin/tenants, users, farms, sheds, flocks, placements, daily-records, rec
 
 ## Open design assumptions
 
-- Invitation delivery is conditional on P2 confirmation; the auth surface does not add public signup.
+- Invite-only onboarding was confirmed by the Phase 3 task; no public signup exists. Invitation delivery remains a deployment seam.
 - The approved matrix says Accountant has finance view and operational read-only access. This outline makes Accountant finance summaries tenant-wide and operational records view-only; Manager scope remains assigned-farm.
 - GET /tenant exposes only fields needed by authorized tenant users. Exact tenant settings are not a substitute for tenant_id request input.
 - Roles for alert-threshold administration are not explicit in the approved matrix; only Owner may change rules until the owner assigns that action.
 - Own, same day for Worker means own-created entry on the farm's current local date; role policy can adjust this without changing tenant rules.
+
+## Phase 3 implemented identity subset
+
+The implementation lives under `/api/v1/auth` and is intentionally limited to identity operations; the other endpoint rows remain design scope for later vertical slices.
+
+| Method + path | Purpose | Permitted roles |
+|---|---|---|
+| POST `/auth/login` | Verify credentials, create refresh session, issue short-lived access token | Public; database rate-limited |
+| POST `/auth/refresh` | Rotate the HttpOnly refresh cookie and issue a new access token | Valid refresh-session holder |
+| POST `/auth/logout` | Revoke the presented refresh session and clear the cookie | Public operation scoped to the presented session cookie |
+| POST `/auth/invitations/accept` | Set password and activate a single-use invitation | Public; valid, unexpired invitation token |
+| POST `/auth/tenants` | Create tenant and initial Owner invitation | Super Admin |
+| GET `/auth/tenants` | List tenant administration names and IDs | Super Admin |
+| GET `/auth/users` | List users in the authenticated tenant | Owner |
+| POST `/auth/invitations` | Invite a Manager, Worker, or Accountant | Owner |
+| PATCH `/auth/users/{user_id}/role` | Change a tenant user's role and revoke their sessions | Owner; target must belong to the caller's tenant |
+| GET `/health`, `/ready` | Process liveness and database readiness | Public; no business data |
+
+## Phase 4 implemented farm operations endpoints
+
+All rows below are tenant-scoped from the authenticated principal. Reads are paginated and accept `search` where relevant. Manager access is filtered to assigned farms.
+
+| Method + path | Purpose | Permitted roles |
+|---|---|---|
+| GET, POST `/farms` | List/search; create | Owner, Manager, Worker, Accountant for GET; Owner for POST |
+| GET, PATCH, DELETE `/farms/{farm_id}` | Read, edit, delete only when no sheds exist | GET: tenant roles; PATCH: Owner, assigned Manager; DELETE: Owner |
+| GET, POST `/farms/{farm_id}/sheds` | List/search and create sheds | GET: tenant roles; POST: Owner, assigned Manager |
+| PATCH, DELETE `/sheds/{shed_id}` | Edit; delete only when no flock exists | PATCH: Owner, assigned Manager; DELETE: Owner |
+| GET, POST `/flocks` | List/search/filter and create a flock with its initial placement | GET: tenant roles; POST: Owner, assigned Manager |
+| GET, PATCH, DELETE `/flocks/{flock_id}` | Read, rename active flock; delete only before placement | GET: tenant roles; PATCH: Owner, assigned Manager; DELETE: Owner |
+| POST `/flocks/{flock_id}/placements` | Add placement fact | Owner, assigned Manager |
+| POST `/flocks/{flock_id}/close` | Close and lock flock | Owner, assigned Manager |
+| POST `/flocks/{flock_id}/reopen` | Reopen with reason; Super Admin lookup is limited to the specified flock and returns status only | Owner, Super Admin |
+| GET, PUT `/settings` | Read/replace nullable bag size kg, target mortality percent, target FCR, and Manager/Worker daily edit windows (1–30 days; defaults 7/1) | Owner |
+
+The PostgreSQL migration enforces one active flock per shed with a partial unique index; row-locking triggers enforce summed placement capacity and reject placement edits for closed flocks. Cross-table aggregate limits cannot be expressed as a regular CHECK constraint. API and domain validation return earlier, clearer errors, while database checks remain authoritative.
+
+## Phase 6 implemented daily operations endpoints
+
+All daily operations are scoped to the authenticated tenant and the flock's farm. Daily bird counts are calculated from placement and record facts in the domain engine; they are returned as derived values and are not stored.
+
+| Method + path | Purpose | Permitted roles |
+|---|---|---|
+| GET, POST `/flocks/{flock_id}/daily-records` | List records and missing-day flags; submit a daily record with `Idempotency-Key` | GET: Owner, assigned Manager, Worker (own rows), Accountant; POST: Owner, assigned Manager, Worker (same day) |
+| PATCH `/daily-records/{record_id}` | Edit with `expected_version`; recompute the ledger from the changed date and audit old/new values | Owner (any past date), assigned Manager (tenant-configured window, default 7 days), Worker (own record in tenant-configured window, default same day) |
+| GET, POST `/flocks/{flock_id}/weight-samples` | Paginated list or add a sample size and average kg measurement | GET: Owner, assigned Manager, Worker (own rows), Accountant; POST: Owner, assigned Manager, Worker (same day) |
+| GET, POST `/farms/{farm_id}/feed-purchases` | Paginated list or record feed purchases; bag input snapshots configured tenant bag size and normalized kg | GET: Owner, assigned Manager, Accountant; POST: Owner, assigned Manager |
+
+Daily create uses unique `(tenant_id, flock_id, record_date)` and `(tenant_id, created_by, idempotency_key)` constraints. Matching request retries return the prior row; key reuse with different content conflicts. Updates require an expected version and append audit entries in the same transaction. The Owner configures the Manager and Worker date windows. See ADR 0007 for date-window, weekly-spacing, draft, and tap-count assumptions.

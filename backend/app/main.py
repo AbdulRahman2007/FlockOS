@@ -1,11 +1,24 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import cast
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.types import ExceptionHandler
 
+from app.api.v1.auth import router as auth_router
+from app.api.v1.daily_records import router as daily_records_router
+from app.api.v1.dashboard import router as dashboard_router
+from app.api.v1.farm_resources import router as farm_resources_router
+from app.api.v1.farms import router as farms_router
+from app.api.v1.finance import router as finance_router
+from app.api.v1.reports import router as reports_router
+from app.core.authz import public_operation
 from app.core.config import get_settings
+from app.core.errors import http_error_handler, unhandled_error_handler, validation_error_handler
 from app.core.logging import configure_logging, get_logger
 from app.db.session import engine
 
@@ -38,14 +51,31 @@ app = FastAPI(
     description="API foundation for the POUKTRY poultry farm management platform.",
     lifespan=lifespan,
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[get_settings().frontend_origin],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "Idempotency-Key"],
+)
+app.add_exception_handler(HTTPException, cast(ExceptionHandler, http_error_handler))
+app.add_exception_handler(RequestValidationError, cast(ExceptionHandler, validation_error_handler))
+app.add_exception_handler(Exception, unhandled_error_handler)
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(farms_router, prefix="/api/v1")
+app.include_router(farm_resources_router, prefix="/api/v1")
+app.include_router(daily_records_router, prefix="/api/v1")
+app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(finance_router, prefix="/api/v1")
+app.include_router(reports_router, prefix="/api/v1")
 
 
-@app.get("/health", tags=["health"])
+@app.get("/health", tags=["health"], dependencies=[Depends(public_operation)])
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/ready", tags=["health"])
+@app.get("/ready", tags=["health"], dependencies=[Depends(public_operation)])
 def readiness() -> dict[str, str]:
     if not database_ready():
         raise HTTPException(status_code=503, detail="Service is not ready")

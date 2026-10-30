@@ -71,6 +71,20 @@ All references are tenant-scoped. The diagram omits repeated `tenant_id` edges f
 | `daily_records` | `tenant_id`, `id PK`, `flock_id`, `record_date`, `deaths`, `culling`, `feed_used_quantity`, `feed_used_unit` (`kg`/`bag`), nullable `bag_size_kg_snapshot`, nullable `water_liters`, nullable `temperature_c`, nullable `notes`, actor/timestamps, `version` | Composite FK; `UQ (tenant_id,flock_id,record_date)`; counts nonnegative; feed quantity nonnegative and bag size required only for bag input; water is liters and temperature is °C; no zero-fill for gaps. Domain derives feed kg from entered quantity/unit and bag-size snapshot. Index `(tenant_id,record_date DESC,flock_id)` and `(tenant_id,flock_id,record_date)`. |
 | `mortality_weight_entries` | `tenant_id`, `id PK`, `daily_record_id`, `entry_number`, `dead_bird_count`, `total_weight_kg`, `recorded_by`, `created_at` | Composite FK to daily record; `UQ (tenant_id,daily_record_id,entry_number)`; dead count > 0, total weight kg > 0; append-only weights for a day's deaths; domain validates aggregate dead_bird_count against that daily record's deaths before treating the day's dead biomass as complete. Index `(tenant_id,daily_record_id)`. |
 | `weight_samples` | `tenant_id`, `id PK`, `flock_id`, `sampled_on`, `sample_size`, `average_weight_kg`, `created_by`, timestamps, `version` | Composite FK; `CK sample_size > 0`, weight > 0; index `(tenant_id,flock_id,sampled_on DESC)`. Avoid a unique weekly bucket until â€œweekâ€ boundary is approved. |
+
+## Phase 3 identity schema implemented
+
+Phase 3 introduces the identity subset below. These are the actual migration names and columns; the broader inventory above remains design target for later business slices.
+
+| Implemented table | Tenant and integrity notes | Indexes |
+|---|---|---|
+| `tenants` | Tenant root; nullable plan and user limit; UUID primary key | Primary key |
+| `users` | Nullable `tenant_id` only for Super Admin; globally unique normalized email; tenant/email uniqueness; Argon2 hash; role and active flag | Unique `(tenant_id,email)` |
+| `farm_assignments` | Required `tenant_id`, `user_id`, `farm_id`; unique tenant/user/farm assignment | Unique `(tenant_id,user_id,farm_id)` |
+| `invitations` | Nullable tenant for platform seam; hashed single-use token, expiry, accept timestamp, creator | Unique token hash |
+| `auth_sessions` | User FK; hashed refresh token, expiry and revocation | Unique token hash; `(user_id,revoked_at)` |
+| `login_attempts` | Hashed identity/IP bucket, bounded time window, atomic attempt count | Unique `(bucket_key,window_start)` |
+| `audit_logs` | Nullable tenant and actor for platform events; action, entity, before/after text, UTC timestamp | `(tenant_id,created_at)` |
 | `bird_transfers` | `tenant_id`, `id PK`, `from_flock_id`, `to_flock_id`, `transfer_date`, `bird_count`, nullable `reason`, `created_by`, timestamps | Both composite FKs same tenant; `CK from_flock_id <> to_flock_id`, `bird_count > 0`; one transfer fact updates source and target derivations atomically; indexes `(tenant_id,from_flock_id,transfer_date)` and `(tenant_id,to_flock_id,transfer_date)`. |
 | `buyers` | `tenant_id`, `id PK`, `name`, nullable `phone`, nullable `notes`, `status`, timestamps | `UQ (tenant_id,id)`; no global uniqueness on phone; index `(tenant_id,name)`. |
 | `sales` | `tenant_id`, `id PK`, `flock_id`, `buyer_id`, `sold_on`, `birds`, `total_weight_kg`, `rate_per_kg`, `amount_pkr`, `created_by`, `updated_by`, timestamps, `version` | Composite FKs; `CK birds > 0`, weight/rate/amount nonnegative; total weight is kg, rate PKR/kg. Do not force `amount = weight Ã— rate` until rounding/override policy is approved. Indexes `(tenant_id,sold_on DESC,buyer_id)`, `(tenant_id,flock_id,sold_on)`, `(tenant_id,buyer_id,sold_on DESC)`. |
@@ -86,6 +100,14 @@ All references are tenant-scoped. The diagram omits repeated `tenant_id` edges f
 | `idempotency_keys` | `tenant_id`, `id PK`, `user_id`, `key`, `request_hash`, `response_status`, `response_body` JSONB, `created_at`, `expires_at` | Composite FK; `UQ (tenant_id,user_id,key)`; reject same key with different request hash; index expiry for cleanup. |
 | `dashboard_snapshots` | `tenant_id`, `id PK`, `farm_id`, nullable `flock_id`, `snapshot_date`, `projection_version`, `computed_at`, `is_stale`, derived `payload` JSONB | Composite FKs; unique key on tenant/farm/flock/date/version with explicit null strategy; projection is disposable/rebuildable. Indexes `(tenant_id,farm_id,snapshot_date DESC,is_stale)` and `(tenant_id,flock_id,snapshot_date DESC)`. |
 | `projection_refresh_jobs` | `tenant_id`, `id PK`, `farm_id`, nullable `flock_id`, `from_date`, `reason`, `requested_at`, nullable `claimed_at`/`completed_at`, `attempts`, nullable `last_error_code` | Composite FKs; `CHECK attempts >= 0`; jobs are coalesced by tenant/farm/flock/date where possible; worker claims with row locks; indexes `(tenant_id,completed_at,requested_at)` and `(tenant_id,farm_id,flock_id,from_date)`. Errors contain safe codes, not secrets or PII. |
+
+## Phase 6 implemented daily operations subset
+
+Migration `0004_daily_operations` adds `daily_records`, `weight_samples`, and `feed_purchases`; `0005_configurable_daily_windows` adds edit-window settings. The daily record has unique `(tenant_id, flock_id, record_date)` and per-user idempotency-key uniqueness, request hash, optimistic version, and actor/timestamps. Facts are tenant-scoped and reference flock, farm, and user with tenant-aware foreign keys. The response derives closing birds from placement and daily facts; no bird total is stored. `weight_samples` stores sample size and average kg. Feed purchases preserve entered quantity/unit, the configured bag-size snapshot, normalized kg, optional PKR amount and supplier text. `tenant_settings` stores Owner-configured Manager and Worker edit windows (1–30 inclusive calendar dates; defaults 7 and 1).
+
+## Phase 8 implemented finance schema
+
+Migration `0007_sales_and_expenses` preserves prior direct-cost facts while renaming the table to `expenses`, and adds tenant-scoped buyers, suppliers, sales, and sale-payment facts. Migration `0008_expense_alloc_links` adds supplier FK on feed purchases, explicit allocation dates on farm expenses, and `expense_eligible_flocks` for the selected eligible set. Allocation totals are derived at read time from placement, daily-record, and sale facts. Each configured date interval is inclusive and uses opening live birds per day. Profit reports return estimated and actual values separately; estimated value is nullable until a market price and weight sample exist. Sale amount remains independently entered; receipt amount does not affect actual profit.
 
 ## Derivation and source-of-truth map
 
@@ -110,3 +132,7 @@ Keep separate module boundaries for medicine/vaccination, fuller inventory, noti
 - Dead-bird biomass comes from separate mortality weight entries attached to daily records. The day's dead biomass is complete only when entry counts sum to that day's deaths; missing or partial measurements do not get extrapolated. Confirm this validation behavior during ERD review.
 - Feed returns add to stock, as confirmed in Phase 0. Here `return` means return into farm stock.
 - Direct/farm expense assignment and sale amount rounding/overrides require validation rules before migrations.
+
+## Phase 4 implemented subset
+
+Migration `0003_farm_operations` implements `farms`, `sheds`, `flocks`, `flock_placements`, and `tenant_settings`. The settings row is keyed by tenant and stores nullable `feed_bag_size_kg`, `target_mortality_percent`, and `target_fcr`; all remain unset until an Owner configures them. A shed may have only one active flock. PostgreSQL triggers serialize placement checks by locking the shed row, enforce the aggregate capacity, block placement edits while closed, prevent capacity reductions below current active placements, and verify capacity/active-slot rules when a closed flock is reopened. These database rules supplement ordinary column CHECK, FK, and unique constraints.

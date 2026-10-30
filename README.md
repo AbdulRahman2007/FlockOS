@@ -29,6 +29,16 @@ npm.cmd run dev --prefix frontend
 
 Open http://localhost:5173. API liveness is at http://localhost:8000/health; readiness checks PostgreSQL at http://localhost:8000/ready. OpenAPI documentation is at http://localhost:8000/docs.
 
+Sign-in is invitation-only. After applying migrations, create the first platform administrator once:
+
+~~~powershell
+Push-Location backend
+..\.venv\Scripts\python.exe -m app.bootstrap_super_admin --email admin@example.com --name "Platform Admin"
+Pop-Location
+~~~
+
+The command prompts for the password without echoing it. The Super Admin can create a tenant and its Owner invitation from the authenticated tenant API; invitation tokens must be delivered through a trusted channel.
+
 The .env.example file contains local-only placeholder credentials. Replace them in your ignored .env before using a shared machine, never put production secrets or real farm data in this development setup, and do not commit .env.
 
 ## Quality checks
@@ -52,4 +62,4 @@ For browser tests, install Playwright's Chromium headless shell once with npm.cm
 
 ## Current foundation
 
-This phase establishes configuration, health/readiness, migration tooling, CI, test harnesses, localization scaffolding, and a responsive route-split app shell. The first Alembic migration is an intentionally empty schema baseline; business tables and workflows follow their approved vertical slices.
+The platform foundation, identity schema, invitation-only authentication, role checks, tenant repository boundary, and login shell are in place. Farm business tables and workflows follow their approved vertical slices.

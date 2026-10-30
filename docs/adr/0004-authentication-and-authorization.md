@@ -1,6 +1,6 @@
 # ADR 0004: Authentication and authorization
 
-- Status: Proposed for review
+- Status: Accepted for Phase 3 implementation
 - Date: 2026-10-12
 
 ## Context
@@ -19,11 +19,11 @@ Choose option 2. Store only Argon2 password hashes. Issue short-lived signed acc
 
 Resolve tenant, role, and farm assignments from trusted identity state. A tenant user belongs to one tenant; Manager/Worker requests are additionally constrained to assigned farms. Super Admin is a separate platform identity with no tenant business access by default. Every endpoint/method uses server-side authorization, deny by default, and returns the same safe not-found behavior for foreign-tenant and absent IDs. Frontend route guards improve navigation only and are not security controls.
 
-Use an explicit CORS allow-list and a least-privilege database role. Keep access tokens short lived; refresh tokens are rotated/revocable. Invite delivery is conditional on confirmation of P2; no public signup route is designed.
+Use an explicit CORS allow-list and a least-privilege database role. Keep access tokens short lived; refresh tokens are rotated/revocable. Onboarding is invite-only: Super Admin creates a tenant and its first Owner invitation; Owners invite tenant users. There is no public signup route. Invitation tokens are random, single-use, hashed at rest, and expire after seven days. Until mail delivery is selected, the token is returned to the trusted inviter for delivery.
 
 ## Consequences
 
 - Authorization must be tested across endpoint × role and cross-tenant cases.
 - Farm assignments need efficient tenant/user/farm indexes and must be applied to reports and exports, not just detail pages.
-- Token refresh requires replay detection and safe session revocation semantics to finalize in implementation.
+- Reuse of a revoked refresh token revokes the user's active sessions. Concurrent refresh is serialized by locking the session row.
 - Super Admin tenant management/reopen actions need narrow, audited service operations; they do not authorize tenant business-data browsing.

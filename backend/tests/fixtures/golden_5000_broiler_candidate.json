@@ -1,0 +1,657 @@
+{
+  "_note": "Synthetic golden case. Expected values come from spreadsheet formulas, not application code. Compare with Decimal; never round intermediates. Rounding proposal in README A8. Assumptions A1-A9 pending owner approval.",
+  "inputs": {
+    "placement_date": "2026-03-01",
+    "birds_placed": 5000,
+    "placement_weight_kg": "0.04",
+    "weight_sample_size": 50,
+    "bag_size_kg": 50,
+    "feed_price_per_bag_pkr": 7200,
+    "chick_price_pkr": 135,
+    "market_price_per_kg_pkr": 320,
+    "opening_feed_stock_kg": 0,
+    "farm_expense_pool_pkr": 120000,
+    "other_flocks_bird_days": 100000,
+    "checkpoint_day": 28,
+    "weight_samples": [
+      {
+        "day": 0,
+        "avg_weight_kg": "0.04"
+      },
+      {
+        "day": 7,
+        "avg_weight_kg": "0.185"
+      },
+      {
+        "day": 14,
+        "avg_weight_kg": "0.465"
+      },
+      {
+        "day": 21,
+        "avg_weight_kg": "0.92"
+      },
+      {
+        "day": 28,
+        "avg_weight_kg": "1.48"
+      },
+      {
+        "day": 35,
+        "avg_weight_kg": "2.05"
+      }
+    ]
+  },
+  "daily": [
+    {
+      "day": 1,
+      "mortality": 12,
+      "culling": 0,
+      "feed_used_kg": 72
+    },
+    {
+      "day": 2,
+      "mortality": 10,
+      "culling": 0,
+      "feed_used_kg": 94
+    },
+    {
+      "day": 3,
+      "mortality": 9,
+      "culling": 0,
+      "feed_used_kg": 115
+    },
+    {
+      "day": 4,
+      "mortality": 8,
+      "culling": 0,
+      "feed_used_kg": 137
+    },
+    {
+      "day": 5,
+      "mortality": 7,
+      "culling": 3,
+      "feed_used_kg": 159
+    },
+    {
+      "day": 6,
+      "mortality": 6,
+      "culling": 0,
+      "feed_used_kg": 180
+    },
+    {
+      "day": 7,
+      "mortality": 5,
+      "culling": 0,
+      "feed_used_kg": 202
+    },
+    {
+      "day": 8,
+      "mortality": 5,
+      "culling": 0,
+      "feed_used_kg": 223
+    },
+    {
+      "day": 9,
+      "mortality": 4,
+      "culling": 0,
+      "feed_used_kg": 245
+    },
+    {
+      "day": 10,
+      "mortality": 4,
+      "culling": 2,
+      "feed_used_kg": 266
+    },
+    {
+      "day": 11,
+      "mortality": 4,
+      "culling": 0,
+      "feed_used_kg": 288
+    },
+    {
+      "day": 12,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 309
+    },
+    {
+      "day": 13,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 330
+    },
+    {
+      "day": 14,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 352
+    },
+    {
+      "day": 15,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 373
+    },
+    {
+      "day": 16,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 395
+    },
+    {
+      "day": 17,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 416
+    },
+    {
+      "day": 18,
+      "mortality": 3,
+      "culling": 2,
+      "feed_used_kg": 437
+    },
+    {
+      "day": 19,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 458
+    },
+    {
+      "day": 20,
+      "mortality": 2,
+      "culling": 0,
+      "feed_used_kg": 480
+    },
+    {
+      "day": 21,
+      "mortality": 2,
+      "culling": 0,
+      "feed_used_kg": 501
+    },
+    {
+      "day": 22,
+      "mortality": 2,
+      "culling": 0,
+      "feed_used_kg": 522
+    },
+    {
+      "day": 23,
+      "mortality": 2,
+      "culling": 0,
+      "feed_used_kg": 544
+    },
+    {
+      "day": 24,
+      "mortality": 2,
+      "culling": 0,
+      "feed_used_kg": 565
+    },
+    {
+      "day": 25,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 586
+    },
+    {
+      "day": 26,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 607
+    },
+    {
+      "day": 27,
+      "mortality": 3,
+      "culling": 3,
+      "feed_used_kg": 628
+    },
+    {
+      "day": 28,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 649
+    },
+    {
+      "day": 29,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 670
+    },
+    {
+      "day": 30,
+      "mortality": 3,
+      "culling": 0,
+      "feed_used_kg": 691
+    },
+    {
+      "day": 31,
+      "mortality": 4,
+      "culling": 0,
+      "feed_used_kg": 712
+    },
+    {
+      "day": 32,
+      "mortality": 4,
+      "culling": 0,
+      "feed_used_kg": 733
+    },
+    {
+      "day": 33,
+      "mortality": 4,
+      "culling": 0,
+      "feed_used_kg": 754
+    },
+    {
+      "day": 34,
+      "mortality": 5,
+      "culling": 0,
+      "feed_used_kg": 774
+    },
+    {
+      "day": 35,
+      "mortality": 6,
+      "culling": 0,
+      "feed_used_kg": 467
+    }
+  ],
+  "sales": [
+    {
+      "day": 34,
+      "buyer": "Buyer A (retailer)",
+      "birds": 2000,
+      "total_weight_kg": 3940,
+      "rate_per_kg_pkr": 320,
+      "paid_pkr": 1260800
+    },
+    {
+      "day": 35,
+      "buyer": "Buyer B (wholesaler)",
+      "birds": 2841,
+      "total_weight_kg": 5796,
+      "rate_per_kg_pkr": 318,
+      "paid_pkr": 1500000
+    }
+  ],
+  "feed_movements": [
+    {
+      "day": 1,
+      "type": "Purchase",
+      "bags": 21,
+      "signed_kg": 1050
+    },
+    {
+      "day": 8,
+      "type": "Purchase",
+      "bags": 42,
+      "signed_kg": 2100
+    },
+    {
+      "day": 15,
+      "type": "Purchase",
+      "bags": 63,
+      "signed_kg": 3150
+    },
+    {
+      "day": 22,
+      "type": "Purchase",
+      "bags": 84,
+      "signed_kg": 4200
+    },
+    {
+      "day": 22,
+      "type": "Adjustment",
+      "bags": null,
+      "signed_kg": -25
+    },
+    {
+      "day": 29,
+      "type": "Purchase",
+      "bags": 101,
+      "signed_kg": 5050
+    },
+    {
+      "day": 31,
+      "type": "Return",
+      "bags": 2,
+      "signed_kg": -100
+    }
+  ],
+  "expenses": [
+    {
+      "day": 5,
+      "category": "Vaccination",
+      "amount_pkr": 6000
+    },
+    {
+      "day": 7,
+      "category": "Labour",
+      "amount_pkr": 14000
+    },
+    {
+      "day": 10,
+      "category": "Litter/electricity",
+      "amount_pkr": 12000
+    },
+    {
+      "day": 14,
+      "category": "Vaccination",
+      "amount_pkr": 6000
+    },
+    {
+      "day": 14,
+      "category": "Labour",
+      "amount_pkr": 14000
+    },
+    {
+      "day": 21,
+      "category": "Medicine/vitamins",
+      "amount_pkr": 9000
+    },
+    {
+      "day": 21,
+      "category": "Labour",
+      "amount_pkr": 14000
+    },
+    {
+      "day": 25,
+      "category": "Gas/electricity",
+      "amount_pkr": 15000
+    },
+    {
+      "day": 28,
+      "category": "Labour",
+      "amount_pkr": 14000
+    },
+    {
+      "day": 35,
+      "category": "Labour",
+      "amount_pkr": 14000
+    }
+  ],
+  "expected": {
+    "G-01": {
+      "metric": "Birds placed",
+      "value": "5000",
+      "unit": "birds"
+    },
+    "G-02": {
+      "metric": "Total mortality (deaths), day 35",
+      "value": "149",
+      "unit": "birds"
+    },
+    "G-03": {
+      "metric": "Total culling, day 35",
+      "value": "10",
+      "unit": "birds"
+    },
+    "G-04": {
+      "metric": "Total birds sold",
+      "value": "4841",
+      "unit": "birds"
+    },
+    "G-05": {
+      "metric": "Closing birds, day 35 (flock closes at 0)",
+      "value": "0",
+      "unit": "birds"
+    },
+    "G-06": {
+      "metric": "Cumulative mortality % at day 35",
+      "value": "0.0298",
+      "unit": "fraction"
+    },
+    "G-07": {
+      "metric": "Total loss % (mortality + culling)",
+      "value": "0.0318",
+      "unit": "fraction"
+    },
+    "G-08": {
+      "metric": "Daily mortality % on day 1",
+      "value": "0.0024",
+      "unit": "fraction"
+    },
+    "G-09": {
+      "metric": "Daily mortality % on day 35",
+      "value": "0.00210748155953635",
+      "unit": "fraction"
+    },
+    "G-10": {
+      "metric": "Total feed used",
+      "value": "14934",
+      "unit": "kg"
+    },
+    "G-11": {
+      "metric": "Closing feed stock, day 35",
+      "value": "491",
+      "unit": "kg"
+    },
+    "G-12": {
+      "metric": "Minimum closing feed stock on any day",
+      "value": "91",
+      "unit": "kg"
+    },
+    "G-13": {
+      "metric": "Total sold live weight",
+      "value": "9736",
+      "unit": "kg"
+    },
+    "G-14": {
+      "metric": "Weight of dead and culled birds (A1 method)",
+      "value": "111.335714285714",
+      "unit": "kg"
+    },
+    "G-15": {
+      "metric": "Placement weight total",
+      "value": "200",
+      "unit": "kg"
+    },
+    "G-16": {
+      "metric": "Weight gain, final",
+      "value": "9647.33571428572",
+      "unit": "kg"
+    },
+    "G-17": {
+      "metric": "FINAL FCR (D6 default: dead-bird weight included)",
+      "value": "1.54799215475479",
+      "unit": "ratio"
+    },
+    "G-18": {
+      "metric": "Reference FCR with dead-bird weight excluded",
+      "value": "1.56606543624161",
+      "unit": "ratio"
+    },
+    "G-19": {
+      "metric": "Revenue (sales)",
+      "value": "3103928",
+      "unit": "PKR"
+    },
+    "G-20": {
+      "metric": "Payments received",
+      "value": "2760800",
+      "unit": "PKR"
+    },
+    "G-21": {
+      "metric": "Outstanding balance (udhaar)",
+      "value": "343128",
+      "unit": "PKR"
+    },
+    "G-22": {
+      "metric": "Chick cost",
+      "value": "675000",
+      "unit": "PKR"
+    },
+    "G-23": {
+      "metric": "Feed cost charged to flock",
+      "value": "2150496",
+      "unit": "PKR"
+    },
+    "G-24": {
+      "metric": "Flock-level expenses",
+      "value": "118000",
+      "unit": "PKR"
+    },
+    "G-25": {
+      "metric": "Flock bird-days",
+      "value": "169795",
+      "unit": "bird-days"
+    },
+    "G-26": {
+      "metric": "Farm expense allocation share",
+      "value": "0.629348208825219",
+      "unit": "fraction"
+    },
+    "G-27": {
+      "metric": "Farm-level expense allocated to flock",
+      "value": "75521.7850590263",
+      "unit": "PKR"
+    },
+    "G-28": {
+      "metric": "Total costs",
+      "value": "3019017.78505903",
+      "unit": "PKR"
+    },
+    "G-29": {
+      "metric": "ACTUAL net profit",
+      "value": "84910.2149409736",
+      "unit": "PKR"
+    },
+    "G-30": {
+      "metric": "Actual profit per bird placed",
+      "value": "16.9820429881947",
+      "unit": "PKR"
+    },
+    "G-31": {
+      "metric": "Actual profit per kg sold",
+      "value": "8.72126283288553",
+      "unit": "PKR"
+    },
+    "null": {
+      "metric": null,
+      "value": "None",
+      "unit": null
+    }
+  },
+  "checkpoints": [
+    {
+      "day": "7",
+      "closing_birds": "4940",
+      "cum_mortality_pct": "0.0114",
+      "daily_mortality_pct": "0.00101112234580384",
+      "avg_weight_kg": "0.185",
+      "live_weight_kg": "913.9",
+      "cum_sold_weight_kg": "0",
+      "cum_dead_weight_kg": "6.79142857142857",
+      "placement_weight_kg": "200",
+      "weight_gain_kg": "720.691428571429",
+      "cum_feed_kg": "959",
+      "cum_fcr": "1.3306665820918",
+      "closing_feed_stock_kg": "91"
+    },
+    {
+      "day": "14",
+      "closing_birds": "4912",
+      "cum_mortality_pct": "0.0166",
+      "daily_mortality_pct": "0.000610376398779247",
+      "avg_weight_kg": "0.465",
+      "live_weight_kg": "2284.08",
+      "cum_sold_weight_kg": "0",
+      "cum_dead_weight_kg": "16.0114285714286",
+      "placement_weight_kg": "200",
+      "weight_gain_kg": "2100.09142857143",
+      "cum_feed_kg": "2972",
+      "cum_fcr": "1.41517648211234",
+      "closing_feed_stock_kg": "178"
+    },
+    {
+      "day": "21",
+      "closing_birds": "4891",
+      "cum_mortality_pct": "0.0204",
+      "daily_mortality_pct": "0.00040874718986307",
+      "avg_weight_kg": "0.92",
+      "live_weight_kg": "4499.72",
+      "cum_sold_weight_kg": "0",
+      "cum_dead_weight_kg": "30.9114285714286",
+      "placement_weight_kg": "200",
+      "weight_gain_kg": "4330.63142857143",
+      "cum_feed_kg": "6032",
+      "cum_fcr": "1.39286847645444",
+      "closing_feed_stock_kg": "268"
+    },
+    {
+      "day": "28",
+      "closing_birds": "4870",
+      "cum_mortality_pct": "0.024",
+      "daily_mortality_pct": "0.000615637184485943",
+      "avg_weight_kg": "1.48",
+      "live_weight_kg": "7207.6",
+      "cum_sold_weight_kg": "0",
+      "cum_dead_weight_kg": "57.9114285714286",
+      "placement_weight_kg": "200",
+      "weight_gain_kg": "7065.51142857143",
+      "cum_feed_kg": "10133",
+      "cum_fcr": "1.43414954493235",
+      "closing_feed_stock_kg": "342"
+    },
+    {
+      "day": "34",
+      "closing_birds": "2847",
+      "cum_mortality_pct": "0.0286",
+      "daily_mortality_pct": "0.00103050288540808",
+      "avg_weight_kg": "1.96857142857143",
+      "live_weight_kg": "5604.52285714286",
+      "cum_sold_weight_kg": "3940",
+      "cum_dead_weight_kg": "99.0357142857143",
+      "placement_weight_kg": "200",
+      "weight_gain_kg": "9443.55857142857",
+      "cum_feed_kg": "14467",
+      "cum_fcr": "1.53194369374378",
+      "closing_feed_stock_kg": "958"
+    },
+    {
+      "day": "35",
+      "closing_birds": "0",
+      "cum_mortality_pct": "0.0298",
+      "daily_mortality_pct": "0.00210748155953635",
+      "avg_weight_kg": "2.05",
+      "live_weight_kg": "0",
+      "cum_sold_weight_kg": "9736",
+      "cum_dead_weight_kg": "111.335714285714",
+      "placement_weight_kg": "200",
+      "weight_gain_kg": "9647.33571428572",
+      "cum_feed_kg": "14934",
+      "cum_fcr": "1.54799215475479",
+      "closing_feed_stock_kg": "491"
+    }
+  ],
+  "estimated_profit": {
+    "E-01": {
+      "metric": "Checkpoint day",
+      "value": "28"
+    },
+    "E-02": {
+      "metric": "Live weight on farm (kg)",
+      "value": "7207.6"
+    },
+    "E-03": {
+      "metric": "Estimated value of live birds (PKR)",
+      "value": "2306432"
+    },
+    "E-04": {
+      "metric": "Sales revenue to date (PKR)",
+      "value": "0"
+    },
+    "E-05": {
+      "metric": "Chick cost (PKR)",
+      "value": "675000"
+    },
+    "E-06": {
+      "metric": "Feed cost to date (PKR)",
+      "value": "1459152"
+    },
+    "E-07": {
+      "metric": "Flock expenses to date (PKR)",
+      "value": "104000"
+    },
+    "E-08": {
+      "metric": "ESTIMATED profit (PKR)",
+      "value": "68280"
+    }
+  }
+}

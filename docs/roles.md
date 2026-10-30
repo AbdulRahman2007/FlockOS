@@ -26,4 +26,4 @@ Legend: **Y** = full; **V** = view only; **Own** = own entries only; **N** = non
 - Manager permissions apply only to assigned farms. The Worker same-day and Manager seven-day daily-record windows follow D4; the matrix applies the same-day restriction to Worker weight and feed-use entries as specified by the owner.
 - Workers must not see money screens. Accountant dashboard access is for finance views; operational data is view-only.
 - Reopening is a narrow, audited action requiring a reason under D3; Super Admin permission does not grant tenant business-data access.
-- P2 (invite-only onboarding), P3 (one tenant per user and farm assignment mechanics), and P4–P6 remain proposed in `decisions.md`; this approved matrix does not itself confirm those separate proposals.
+- Invite-only onboarding was confirmed by the Phase 3 task. P3 (one tenant per user and farm assignment mechanics) and P4–P6 remain proposed in `decisions.md`; this matrix does not confirm those separate proposals.
