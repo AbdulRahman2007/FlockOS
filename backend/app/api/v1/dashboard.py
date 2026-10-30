@@ -12,10 +12,24 @@ from sqlalchemy.orm import Session
 from app.api.v1.farm_access import require_farm_scope, tenant_repository
 from app.core.authz import Principal, Role, get_db, require_permission
 from app.domain.calculations import (
+    DEFAULT_TARGET_WEIGHT_CURVE,
     DailyBirdBalance,
     DailyBirdFacts,
+    DailyLossFacts,
+    FlockFcrInputs,
+    TargetWeightPoint,
+    WeightSample as DomainWeightSample,
     calculate_bird_ledger_from_opening,
+    calculate_fcr_from_totals,
+    calculate_running_fcr,
     cumulative_mortality_percent,
+    daily_mortality_above_threshold,
+    estimate_lost_bird_biomass_kg,
+    fcr_worse_than_target,
+    interpolate_average_weight_kg,
+    running_fcr_gain_kg,
+    target_average_weight_kg,
+    daily_mortality_above_threshold,
 )
 from app.models.daily_records import DailyRecord, WeightSample
 from app.models.farm_operations import (
@@ -26,10 +40,12 @@ from app.models.farm_operations import (
     MarketPrice,
     Sale,
     TenantSettings,
+    TenantWeightTarget,
 )
 from app.models.identity import FarmAssignment
 from app.schemas.dashboard import (
     DashboardAlert,
+    DashboardFarmFeedStock,
     DashboardMetric,
     DashboardRead,
     DashboardTrendPoint,
@@ -39,6 +55,7 @@ from app.schemas.dashboard import (
     MarketPriceRead,
 )
 from app.services.audit import record_audit
+from app.services.feed_stock import feed_stock_snapshots
 
 router = APIRouter(tags=["dashboard finance"])
 Db = Annotated[Session, Depends(get_db)]
@@ -167,6 +184,82 @@ def read_dashboard(
         if flock_ids
         else {}
     )
+    cumulative_feed = (
+        dict(
+            db.execute(
+                select(DailyRecord.flock_id, func.sum(DailyRecord.feed_used_kg))
+                .where(
+                    DailyRecord.tenant_id == tenant_id,
+                    DailyRecord.flock_id.in_(flock_ids),
+                    DailyRecord.record_date <= today,
+                )
+                .group_by(DailyRecord.flock_id)
+            ).all()
+        )
+        if flock_ids
+        else {}
+    )
+    sold_weight = (
+        dict(
+            db.execute(
+                select(Sale.flock_id, func.sum(Sale.total_weight_kg))
+                .where(
+                    Sale.tenant_id == tenant_id,
+                    Sale.flock_id.in_(flock_ids),
+                    Sale.sale_on <= today,
+                )
+                .group_by(Sale.flock_id)
+            ).all()
+        )
+        if flock_ids
+        else {}
+    )
+    daily_loss_history = (
+        list(
+            db.execute(
+                select(
+                    DailyRecord.flock_id,
+                    DailyRecord.record_date,
+                    func.sum(DailyRecord.deaths).label("deaths"),
+                    func.sum(DailyRecord.culling).label("culling"),
+                )
+                .where(
+                    DailyRecord.tenant_id == tenant_id,
+                    DailyRecord.flock_id.in_(flock_ids),
+                    DailyRecord.record_date <= today,
+                )
+                .group_by(DailyRecord.flock_id, DailyRecord.record_date)
+                .order_by(DailyRecord.flock_id, DailyRecord.record_date)
+            ).all()
+        )
+        if flock_ids
+        else []
+    )
+    target_rows = list(
+        db.scalars(
+            select(TenantWeightTarget)
+            .where(TenantWeightTarget.tenant_id == tenant_id)
+            .order_by(TenantWeightTarget.age_day)
+        ).all()
+    )
+    target_curve = (
+        tuple(TargetWeightPoint(item.age_day, item.average_weight_kg) for item in target_rows)
+        if target_rows
+        else DEFAULT_TARGET_WEIGHT_CURVE
+    )
+    losses_by_flock: dict[UUID, list[DailyLossFacts]] = defaultdict(list)
+    for loss in daily_loss_history:
+        placement_date = min(
+            (item.placed_on for item in placements if item.flock_id == loss.flock_id),
+            default=loss.record_date,
+        )
+        losses_by_flock[loss.flock_id].append(
+            DailyLossFacts(
+                age_day=(loss.record_date - placement_date).days,
+                deaths=int(loss.deaths),
+                culling=int(loss.culling),
+            )
+        )
     prior_losses = (
         dict(
             db.execute(
@@ -201,7 +294,18 @@ def read_dashboard(
         else {}
     )
     settings = db.get(TenantSettings, tenant_id)
-    target_mortality = settings.target_mortality_percent if settings else None
+    high_daily_mortality = (
+        settings.high_daily_mortality_percent if settings else Decimal("0.5")
+    )
+    early_daily_mortality = (
+        settings.early_daily_mortality_percent if settings else Decimal("1.0")
+    )
+    early_mortality_days = settings.early_mortality_days if settings else 7
+    target_fcr = settings.target_fcr if settings else None
+    fcr_tolerance = settings.fcr_tolerance_percent if settings else Decimal("5")
+    stock_snapshots = feed_stock_snapshots(
+        db, tenant_id=tenant_id, farm_ids=farm_ids, as_of=today
+    )
 
     placements_by_flock: dict[UUID, list[FlockPlacement]] = defaultdict(list)
     for placement in placements:
@@ -222,6 +326,9 @@ def read_dashboard(
     total_birds = 0
     mortality_deaths = 0
     mortality_placed = 0
+    total_fcr_feed = Decimal("0")
+    total_fcr_gain = Decimal("0")
+    fcr_by_flock: dict[UUID, Decimal] = {}
     for flock in flocks:
         flock_placements = placements_by_flock[flock.id]
         placed = sum(item.bird_count for item in flock_placements)
@@ -252,19 +359,131 @@ def read_dashboard(
                     message="daily_record_missing",
                 )
             )
-        if target_mortality is not None and rate > target_mortality:
+        placement_date = min(item.placed_on for item in flock_placements)
+        ledger_by_day = {balance.day: balance for balance in ledger}
+        high_mortality_found = False
+        for daily_record in rows:
+            day_balance = ledger_by_day.get(daily_record.record_date)
+            if day_balance is None:
+                continue
+            age_day = (daily_record.record_date - placement_date).days
+            if daily_mortality_above_threshold(
+                daily_record.deaths,
+                day_balance.opening_birds,
+                age_day,
+                standard_threshold_percent=high_daily_mortality,
+                early_threshold_percent=early_daily_mortality,
+                early_days=early_mortality_days,
+            ):
+                high_mortality_found = True
+                break
+        if high_mortality_found:
             alerts.append(
                 DashboardAlert(
                     kind="high_mortality",
                     farm_id=farm.id,
                     flock_id=flock.id,
-                    message="mortality_above_target",
+                    message="daily_mortality_above_threshold",
                 )
             )
+
+        placement_weights_complete = all(
+            item.average_weight_kg is not None for item in flock_placements
+        )
+        if placement_weights_complete:
+            domain_samples: list[DomainWeightSample] = [
+                DomainWeightSample(
+                    age_day=(sample.sampled_on - placement_date).days,
+                    sample_size=sample.sample_size,
+                    average_weight_kg=sample.average_weight_kg,
+                )
+                for sample in samples_by_flock[flock.id]
+                if sample.sampled_on <= today
+            ]
+            for placement in flock_placements:
+                if not any(sample.sampled_on == placement.placed_on for sample in samples_by_flock[flock.id]):
+                    domain_samples.append(
+                        DomainWeightSample(
+                            age_day=(placement.placed_on - placement_date).days,
+                            sample_size=1,
+                            average_weight_kg=placement.average_weight_kg or Decimal("0"),
+                        )
+                    )
+            placement_biomass = sum(
+                (
+                    Decimal(item.bird_count) * (item.average_weight_kg or Decimal("0"))
+                    for item in flock_placements
+                ),
+                Decimal("0"),
+            )
+            try:
+                average_weight_today = interpolate_average_weight_kg(
+                    (today - placement_date).days, domain_samples
+                )
+                lost_weight = estimate_lost_bird_biomass_kg(
+                    losses_by_flock[flock.id], domain_samples
+                )
+                fcr_inputs = FlockFcrInputs(
+                    cumulative_feed_kg=Decimal(cumulative_feed.get(flock.id) or 0),
+                    sold_live_weight_kg=Decimal(sold_weight.get(flock.id) or 0),
+                    dead_bird_weight_kg=lost_weight,
+                    placement_biomass_kg=placement_biomass,
+                    current_birds_alive=alive,
+                    latest_average_weight_kg=average_weight_today,
+                )
+                actual_fcr = calculate_running_fcr(fcr_inputs)
+                fcr_by_flock[flock.id] = actual_fcr
+                total_fcr_feed += fcr_inputs.cumulative_feed_kg
+                total_fcr_gain += running_fcr_gain_kg(fcr_inputs)
+                if fcr_worse_than_target(actual_fcr, target_fcr, fcr_tolerance):
+                    alerts.append(
+                        DashboardAlert(
+                            kind="fcr_worse_than_target",
+                            farm_id=farm.id,
+                            flock_id=flock.id,
+                            message="fcr_worse_than_target",
+                        )
+                    )
+            except ValueError:
+                # Missing/invalid weights or a non-positive gain make FCR unavailable.
+                pass
 
     avg_mortality = (
         cumulative_mortality_percent(mortality_deaths, mortality_placed)
         if mortality_placed
+        else None
+    )
+    for farm_id, snapshot in stock_snapshots.items():
+        if snapshot.status == "low_feed_cover":
+            alerts.append(
+                DashboardAlert(
+                    kind="low_feed_cover",
+                    farm_id=farm_id,
+                    message="feed_cover_below_threshold",
+                )
+            )
+    available_stocks = [
+        item.stock_kg for item in stock_snapshots.values() if item.stock_kg is not None
+    ]
+    available_cover = [
+        item.feed_cover_days
+        for item in stock_snapshots.values()
+        if item.feed_cover_days is not None
+    ]
+    dashboard_stock = [
+        DashboardFarmFeedStock(
+            farm_id=farm_id,
+            farm_name=farm_by_id[farm_id].name,
+            stock_kg=snapshot.stock_kg,
+            feed_cover_days=snapshot.feed_cover_days,
+            status=snapshot.status,
+        )
+        for farm_id, snapshot in stock_snapshots.items()
+        if farm_id in farm_by_id
+    ]
+    fcr_value = (
+        calculate_fcr_from_totals(total_fcr_feed, total_fcr_gain)
+        if total_fcr_gain > 0
         else None
     )
     metrics: dict[str, DashboardMetric] = {
@@ -273,8 +492,30 @@ def read_dashboard(
             value=avg_mortality,
             status="available" if avg_mortality is not None else "unavailable",
         ),
-        "fcr": DashboardMetric(value=None, status="unavailable_missing_weight_facts"),
-        "feed_cover_days": DashboardMetric(value=None, status="unavailable_missing_stock_facts"),
+        "fcr": DashboardMetric(
+            value=fcr_value,
+            status="available" if fcr_value is not None else "unavailable_missing_weight_facts",
+        ),
+        "feed_stock_kg": DashboardMetric(
+            value=sum(available_stocks, Decimal("0")) if available_stocks else None,
+            status=(
+                "available"
+                if len(available_stocks) == len(stock_snapshots)
+                else "partial_missing_opening_stock"
+                if available_stocks
+                else "unavailable_missing_stock_facts"
+            ),
+        ),
+        "feed_cover_days": DashboardMetric(
+            value=min(available_cover) if available_cover else None,
+            status=(
+                "lowest_farm_cover"
+                if len(available_cover) == len(stock_snapshots) and available_cover
+                else "partial_farm_cover"
+                if available_cover
+                else "unavailable_missing_stock_facts"
+            ),
+        ),
         "estimated_profit_pkr": DashboardMetric(
             value=None, status="unavailable_missing_weight_or_price"
         ),
@@ -354,12 +595,26 @@ def read_dashboard(
             total[2] = Decimal(total[2]) + daily_record.feed_used_kg
         for sample in samples_by_flock[flock.id]:
             if start <= sample.sampled_on <= today:
+                age_day = (sample.sampled_on - placement_date).days
                 trend_points.append(
                     DashboardTrendPoint(
                         day=sample.sampled_on,
                         flock_id=flock.id,
                         flock_name=flock.name,
                         average_weight_kg=sample.average_weight_kg,
+                        target_weight_kg=target_average_weight_kg(age_day, target_curve),
+                    )
+                )
+        sample_dates = {item.sampled_on for item in samples_by_flock[flock.id]}
+        for target_point in target_curve:
+            target_day = placement_date + timedelta(days=target_point.age_day)
+            if start <= target_day <= today and target_day not in sample_dates:
+                trend_points.append(
+                    DashboardTrendPoint(
+                        day=target_day,
+                        flock_id=flock.id,
+                        flock_name=flock.name,
+                        target_weight_kg=target_point.average_weight_kg,
                     )
                 )
     for trend_day, values in sorted(record_totals.items()):
@@ -379,6 +634,7 @@ def read_dashboard(
         metrics=metrics,
         alerts=alerts,
         trends=sorted(trend_points, key=lambda item: item.day),
+        feed_stock_by_farm=dashboard_stock,
         empty=not farms,
     )
 

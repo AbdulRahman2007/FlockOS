@@ -77,11 +77,13 @@ def test_super_admin_can_create_tenant_and_owner_invitation() -> None:
             )
 
         assert response.status_code == 201
+        assert response.json()["tenant_id"]
         invitation = session.scalar(select(Invitation))
         tenant = session.scalar(select(Tenant))
         audit = session.scalar(select(AuditLog).where(AuditLog.action == "tenant.create"))
         assert invitation is not None
         assert tenant is not None
+        assert response.json()["tenant_id"] == str(tenant.id)
         assert audit is not None
         assert invitation.tenant_id == tenant.id == audit.tenant_id
         assert invitation.email == "owner@example.com"

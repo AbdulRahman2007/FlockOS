@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -128,5 +129,48 @@ class FeedPurchase(Base):
     supplier_name: Mapped[str | None] = mapped_column(String(160))
     supplier_id: Mapped[UUID | None] = mapped_column(Uuid)
     notes: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class FeedStockEvent(Base):
+    """Audited opening, return, and adjustment facts for farm feed inventory."""
+
+    __tablename__ = "feed_stock_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "farm_id"], ["farms.tenant_id", "farms.id"], ondelete="CASCADE"
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "created_by"], ["users.tenant_id", "users.id"], ondelete="RESTRICT"
+        ),
+        CheckConstraint(
+            "event_type IN ('opening', 'return_to_stock', 'return_to_supplier', 'adjustment')",
+            name="ck_feed_stock_event_type",
+        ),
+        CheckConstraint(
+            "(event_type = 'opening' AND quantity_kg >= 0) OR "
+            "(event_type IN ('return_to_stock', 'return_to_supplier') AND quantity_kg > 0) OR "
+            "(event_type = 'adjustment' AND quantity_kg <> 0)",
+            name="ck_feed_stock_event_quantity",
+        ),
+        Index(
+            "uq_feed_stock_opening_per_farm",
+            "tenant_id",
+            "farm_id",
+            unique=True,
+            postgresql_where=text("event_type = 'opening'"),
+            sqlite_where=text("event_type = 'opening'"),
+        ),
+        Index("ix_feed_stock_events_tenant_farm_date", "tenant_id", "farm_id", "occurred_on"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    farm_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    occurred_on: Mapped[date] = mapped_column(Date, nullable=False)
+    quantity_kg: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

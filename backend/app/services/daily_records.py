@@ -10,13 +10,19 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.authz import Principal, Role
-from app.domain.calculations import DailyBirdFacts, calculate_bird_ledger, recompute_bird_ledger
+from app.domain.calculations import (
+    DailyBirdFacts,
+    FeedStockMovement,
+    calculate_bird_ledger,
+    recompute_bird_ledger,
+)
 from app.models.daily_records import DailyRecord, FeedPurchase, WeightSample
 from app.models.farm_operations import Flock, FlockPlacement, Sale
 from app.repositories.base import TenantContext
 from app.repositories.daily_records import DailyRepository
 from app.schemas.daily_records import DailyRecordCreate, DailyRecordUpdate, FeedPurchaseCreate
 from app.services.audit import record_audit
+from app.services.feed_stock import FeedStockError, validate_feed_stock_change
 
 
 class DailyRecordError(ValueError):
@@ -133,6 +139,20 @@ def create_daily_record(
         calculate_bird_ledger(placed_birds, facts)
     except ValueError as error:
         raise DailyRecordError(422, str(error)) from None
+    if payload.feed_used_kg > 0:
+        try:
+            validate_feed_stock_change(
+                session,
+                tenant_id=principal.tenant_id,
+                farm_id=flock.farm_id,
+                movement=(
+                    FeedStockMovement(payload.record_date, "usage", payload.feed_used_kg)
+                    if payload.feed_used_kg > 0
+                    else None
+                ),
+            )
+        except FeedStockError as error:
+            raise DailyRecordError(error.status_code, str(error)) from None
     now = datetime.now(UTC)
     row = DailyRecord(
         id=uuid4(),
@@ -213,6 +233,21 @@ def update_daily_record(
         )
     except ValueError as error:
         raise DailyRecordError(422, str(error)) from None
+    if record.feed_used_kg > 0 or payload.feed_used_kg > 0:
+        try:
+            validate_feed_stock_change(
+                session,
+                tenant_id=principal.tenant_id,
+                farm_id=flock.farm_id,
+                movement=(
+                    FeedStockMovement(payload.record_date, "usage", payload.feed_used_kg)
+                    if payload.feed_used_kg > 0
+                    else None
+                ),
+                exclude_usage_id=record.id,
+            )
+        except FeedStockError as error:
+            raise DailyRecordError(error.status_code, str(error)) from None
     old_value = json.dumps(
         {
             "record_date": record.record_date.isoformat(),
@@ -327,6 +362,15 @@ def create_feed_purchase(
         if payload.unit == "bags" and bag_size_kg
         else payload.quantity
     )
+    try:
+        validate_feed_stock_change(
+            session,
+            tenant_id=principal.tenant_id,
+            farm_id=farm_id,
+            movement=FeedStockMovement(payload.purchased_on, "purchase", quantity_kg),
+        )
+    except FeedStockError as error:
+        raise DailyRecordError(error.status_code, str(error)) from None
     row = FeedPurchase(
         id=uuid4(),
         tenant_id=principal.tenant_id,

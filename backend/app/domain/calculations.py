@@ -5,6 +5,7 @@ module does not read persistence, apply display rounding, or choose event order
 within a day. Callers aggregate same-day facts before calculating balances.
 """
 
+from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -52,6 +53,42 @@ class FlockFcrInputs:
 class FeedMetrics:
     total_used_kg: Decimal
     bag_equivalent: Decimal
+
+
+@dataclass(frozen=True)
+class FeedStockMovement:
+    """A farm-level stock fact; usage is sourced from daily records."""
+
+    day: date
+    kind: str
+    quantity_kg: Decimal
+
+
+@dataclass(frozen=True)
+class FeedStockBalance:
+    day: date
+    opening_kg: Decimal
+    purchases_kg: Decimal
+    usage_kg: Decimal
+    returns_to_stock_kg: Decimal
+    returns_to_supplier_kg: Decimal
+    adjustments_kg: Decimal
+    closing_kg: Decimal
+
+
+@dataclass(frozen=True)
+class TargetWeightPoint:
+    age_day: int
+    average_weight_kg: Decimal
+
+
+DEFAULT_TARGET_WEIGHT_CURVE = (
+    TargetWeightPoint(7, Decimal("0.185")),
+    TargetWeightPoint(14, Decimal("0.465")),
+    TargetWeightPoint(21, Decimal("0.920")),
+    TargetWeightPoint(28, Decimal("1.480")),
+    TargetWeightPoint(35, Decimal("2.050")),
+)
 
 
 @dataclass(frozen=True)
@@ -192,8 +229,8 @@ def interpolate_average_weight_kg(age_day: int, samples: Iterable[WeightSample])
         if sample.age_day < 0 or sample.sample_size <= 0:
             raise ValueError("Weight sample age and sample size must be positive")
         _nonnegative_decimal(sample.average_weight_kg, "Average sampled weight")
-    if age_day < ordered[0].age_day or age_day > ordered[-1].age_day:
-        raise ValueError("Weight interpolation cannot extrapolate beyond sample ages")
+    if age_day < ordered[0].age_day:
+        raise ValueError("Weight interpolation cannot extrapolate before sample ages")
     for left, right in zip(ordered, ordered[1:], strict=False):
         if age_day == left.age_day:
             return left.average_weight_kg
@@ -203,6 +240,32 @@ def interpolate_average_weight_kg(age_day: int, samples: Iterable[WeightSample])
                 left.average_weight_kg
                 + (right.average_weight_kg - left.average_weight_kg) * portion
             )
+    return ordered[-1].average_weight_kg
+
+
+def target_average_weight_kg(
+    age_day: int, points: Iterable[TargetWeightPoint]
+) -> Decimal | None:
+    """Interpolate within a configured target curve without inventing endpoints."""
+    if age_day < 0:
+        raise ValueError("Bird age cannot be negative")
+    ordered = sorted(points, key=lambda point: point.age_day)
+    if not ordered:
+        return None
+    if len({point.age_day for point in ordered}) != len(ordered):
+        raise ValueError("Target weight ages must be unique")
+    for point in ordered:
+        if point.age_day < 0:
+            raise ValueError("Target weight age cannot be negative")
+        _nonnegative_decimal(point.average_weight_kg, "Target average weight")
+    if age_day < ordered[0].age_day or age_day > ordered[-1].age_day:
+        return None
+    for left, right in zip(ordered, ordered[1:], strict=False):
+        if age_day == left.age_day:
+            return left.average_weight_kg
+        if left.age_day < age_day < right.age_day:
+            portion = Decimal(age_day - left.age_day) / Decimal(right.age_day - left.age_day)
+            return left.average_weight_kg + (right.average_weight_kg - left.average_weight_kg) * portion
     return ordered[-1].average_weight_kg
 
 
@@ -325,42 +388,167 @@ def calculate_feed_metrics(consumption_kg: Iterable[Decimal], bag_size_kg: Decim
     return FeedMetrics(total_used_kg=total, bag_equivalent=total / bag_size_kg)
 
 
+def calculate_feed_stock_ledger(
+    movements: Iterable[FeedStockMovement],
+) -> tuple[FeedStockBalance, ...]:
+    """Rebuild farm stock by local date from opening, purchase, use, return, and adjustment facts.
+
+    Daily-record usage and stock events on one farm-local date are aggregated as
+    a single closing balance. Returns to stock increase inventory; returns to a
+    supplier decrease it. Adjustments are signed.
+    """
+    facts = tuple(movements)
+    allowed_kinds = {
+        "opening",
+        "purchase",
+        "usage",
+        "return_to_stock",
+        "return_to_supplier",
+        "adjustment",
+    }
+    openings = [fact for fact in facts if fact.kind == "opening"]
+    if len(openings) != 1:
+        raise ValueError("Exactly one opening stock event is required")
+    for fact in facts:
+        if fact.kind not in allowed_kinds:
+            raise ValueError("Unknown feed stock movement")
+        if fact.kind == "adjustment":
+            if not fact.quantity_kg.is_finite() or fact.quantity_kg == ZERO:
+                raise ValueError("Stock adjustment must be finite and non-zero")
+        else:
+            _nonnegative_decimal(fact.quantity_kg, "Feed stock movement")
+            if fact.kind != "opening" and fact.quantity_kg == ZERO:
+                raise ValueError("Feed stock movement must be greater than zero")
+
+    by_day: dict[date, list[FeedStockMovement]] = defaultdict(list)
+    for fact in facts:
+        by_day[fact.day].append(fact)
+    days = sorted(by_day)
+    if openings[0].day != days[0]:
+        raise ValueError("Opening stock must be dated on or before other stock movements")
+
+    stock = ZERO
+    balances: list[FeedStockBalance] = []
+    for day in days:
+        rows = by_day[day]
+        opening = sum((row.quantity_kg for row in rows if row.kind == "opening"), ZERO)
+        purchases = sum((row.quantity_kg for row in rows if row.kind == "purchase"), ZERO)
+        usage = sum((row.quantity_kg for row in rows if row.kind == "usage"), ZERO)
+        returned = sum(
+            (row.quantity_kg for row in rows if row.kind == "return_to_stock"), ZERO
+        )
+        returned_to_supplier = sum(
+            (row.quantity_kg for row in rows if row.kind == "return_to_supplier"), ZERO
+        )
+        adjustments = sum((row.quantity_kg for row in rows if row.kind == "adjustment"), ZERO)
+        closing = stock + opening + purchases + returned - usage - returned_to_supplier + adjustments
+        if closing < ZERO:
+            raise ValueError(f"Feed stock cannot be negative on {day.isoformat()}")
+        balances.append(
+            FeedStockBalance(
+                day=day,
+                opening_kg=opening,
+                purchases_kg=purchases,
+                usage_kg=usage,
+                returns_to_stock_kg=returned,
+                returns_to_supplier_kg=returned_to_supplier,
+                adjustments_kg=adjustments,
+                closing_kg=closing,
+            )
+        )
+        stock = closing
+    return tuple(balances)
+
+
 def calculate_feed_stock(
     opening_kg: Decimal,
     purchases_kg: Decimal,
     usage_kg: Decimal,
     returns_to_stock_kg: Decimal,
     adjustments_kg: Decimal,
+    returns_to_supplier_kg: Decimal = ZERO,
 ) -> Decimal:
-    """Apply D7 stock equation; adjustment is signed, returns add to stock."""
+    """Apply D7 stock equation; returns to stock add, supplier returns subtract."""
     for name, value in (
         ("Opening stock", opening_kg),
         ("Purchases", purchases_kg),
         ("Usage", usage_kg),
         ("Returns to stock", returns_to_stock_kg),
+        ("Returns to supplier", returns_to_supplier_kg),
     ):
         _nonnegative_decimal(value, name)
     if not adjustments_kg.is_finite():
         raise ValueError("Stock adjustment must be finite")
-    stock = opening_kg + purchases_kg - usage_kg + returns_to_stock_kg + adjustments_kg
+    stock = (
+        opening_kg
+        + purchases_kg
+        - usage_kg
+        + returns_to_stock_kg
+        - returns_to_supplier_kg
+        + adjustments_kg
+    )
     if stock < ZERO:
         raise ValueError("Feed stock cannot be negative")
     return stock
 
 
 def calculate_feed_cover_days(
-    stock_kg: Decimal, trailing_seven_day_usage_kg: Decimal
+    stock_kg: Decimal, trailing_usage_kg: Decimal, usage_window_days: int = 7
 ) -> Decimal | None:
-    """Return available days of feed from stock and the approved trailing-week usage."""
+    """Return feed cover days using total usage over a configured trailing window."""
     _nonnegative_decimal(stock_kg, "Feed stock")
-    _nonnegative_decimal(trailing_seven_day_usage_kg, "Trailing seven-day feed use")
-    if trailing_seven_day_usage_kg == ZERO:
+    _nonnegative_decimal(trailing_usage_kg, "Trailing feed use")
+    if isinstance(usage_window_days, bool) or usage_window_days <= 0:
+        raise ValueError("Feed usage window must be a positive integer")
+    if trailing_usage_kg == ZERO:
         return None
-    return stock_kg / (trailing_seven_day_usage_kg / Decimal(7))
+    return stock_kg / (trailing_usage_kg / Decimal(usage_window_days))
+
+
+def feed_cover_below_threshold(
+    feed_cover_days: Decimal | None, threshold_days: Decimal
+) -> bool:
+    _nonnegative_decimal(threshold_days, "Feed cover threshold")
+    return feed_cover_days is not None and feed_cover_days < threshold_days
+
+
+def daily_mortality_above_threshold(
+    deaths: int,
+    opening_birds: int,
+    age_day: int,
+    *,
+    standard_threshold_percent: Decimal,
+    early_threshold_percent: Decimal,
+    early_days: int,
+) -> bool:
+    if opening_birds <= 0 or deaths < 0:
+        return False
+    threshold = (
+        early_threshold_percent
+        if age_day <= early_days
+        else standard_threshold_percent
+    )
+    return period_mortality_percent(deaths, opening_birds) > threshold
+
+
+def fcr_worse_than_target(
+    actual_fcr: Decimal | None, target_fcr: Decimal | None, tolerance_percent: Decimal
+) -> bool:
+    if actual_fcr is None or target_fcr is None:
+        return False
+    _nonnegative_decimal(actual_fcr, "Actual FCR")
+    _nonnegative_decimal(target_fcr, "Target FCR")
+    _nonnegative_decimal(tolerance_percent, "FCR tolerance")
+    return actual_fcr > target_fcr * (Decimal(1) + tolerance_percent / HUNDRED)
 
 
 def calculate_running_fcr(inputs: FlockFcrInputs) -> Decimal:
     """Calculate running raw FCR using sampled live biomass and D6 terms."""
+    return _fcr_ratio(inputs.cumulative_feed_kg, running_fcr_gain_kg(inputs))
+
+
+def running_fcr_gain_kg(inputs: FlockFcrInputs) -> Decimal:
+    """Return running live-weight gain from the D6 flock facts."""
     _validate_fcr_inputs(inputs)
     if inputs.latest_average_weight_kg is None:
         raise ValueError("Latest average weight is required for running FCR")
@@ -374,7 +562,9 @@ def calculate_running_fcr(inputs: FlockFcrInputs) -> Decimal:
         + inputs.dead_bird_weight_kg
         - inputs.placement_biomass_kg
     )
-    return _fcr_ratio(inputs.cumulative_feed_kg, net_gain)
+    if net_gain <= ZERO:
+        raise ValueError("Net live-weight gain must be greater than zero")
+    return net_gain
 
 
 def calculate_final_fcr(inputs: FlockFcrInputs) -> Decimal:
@@ -398,6 +588,13 @@ def _fcr_ratio(feed_kg: Decimal, net_weight_gain_kg: Decimal) -> Decimal:
     if net_weight_gain_kg <= ZERO:
         raise ValueError("Net live-weight gain must be greater than zero")
     return feed_kg / net_weight_gain_kg
+
+
+def calculate_fcr_from_totals(feed_kg: Decimal, net_weight_gain_kg: Decimal) -> Decimal:
+    """Calculate a feed-weighted FCR from summed tenant/flock totals."""
+    _nonnegative_decimal(feed_kg, "Cumulative feed")
+    _nonnegative_decimal(net_weight_gain_kg, "Net live-weight gain")
+    return _fcr_ratio(feed_kg, net_weight_gain_kg)
 
 
 def allocate_farm_cost(

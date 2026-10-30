@@ -15,6 +15,7 @@ Status: Phase 0 baseline derived from `decisions.md` and `AGENTS.md`. Items tied
 - Track suppliers as a simple list linked to feed purchases and expenses; do not implement a payables ledger in v1.
 - Provide configurable in-app alerts for high mortality, missing daily records, low feed cover, and FCR worse than target. Vaccination alerts are deferred.
 - Separate estimated profit from actual profit and label each clearly.
+- Allow each tenant to configure the target-weight curve and alert thresholds below. These are placeholders; replace with the applicable breed manual. Tenants can edit the defaults.
 - Audit edits to daily records, sales, and expenses with actor, timestamp, and old/new values. Recompute derived records from the edited date; reject negative closing bird counts.
 - Lock closed flocks. Only Owner or Super Admin may reopen, with a reason.
 
@@ -54,4 +55,18 @@ Status: Phase 0 baseline derived from `decisions.md` and `AGENTS.md`. Items tied
 
 ## Open confirmation
 
-P1 is approved with the final matrix in `roles.md`. P2–P6 in `decisions.md` remain proposed. Invite-only onboarding, one-tenant-per-user assignments, production hosting, and year-one scale remain pending owner approval. Formula edge cases are tracked in `formulas.md`; core worked examples and FCR/profit definitions have owner approval.
+P1 is approved with the final matrix in `roles.md`. P2 is confirmed in Phase 3. P3–P6 and T1 are confirmed in `decisions.md`. Formula edge cases F1–F6 are confirmed in `formulas.md`; other core worked examples and FCR/profit definitions have owner approval. The target-weight curve and alert values below are placeholders pending the applicable breed manual.
+
+## Tenant-configurable defaults (placeholders; replace with the breed manual)
+
+Target average weight (kg): day 7 = 0.185, day 14 = 0.465, day 21 = 0.920, day 28 = 1.480, day 35 = 2.050 (interpolated between days).
+
+High daily mortality alert: deaths / opening birds above 0.5% (above 1.0% on days 1-7).
+   Example: opening 4,000, deaths 25 -> 0.625% -> alert. Day 3: opening 5,000, deaths 40 -> 0.8% -> no alert.
+
+Low feed cover: closing stock / average daily usage of the last 3 days is below 3 days.
+   Example: stock 450 kg; last 3 days 150, 160, 170 kg -> average 160 -> cover 2.8125 days -> alert.
+
+FCR alert: actual cumulative FCR more than 5% worse than the tenant's target FCR for that day. NO default target FCR is provided: the alert stays disabled until the tenant sets one.
+
+Missing daily record: no record submitted by the end of the farm-local day (Asia/Karachi).

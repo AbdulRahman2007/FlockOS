@@ -1,6 +1,6 @@
 # Formula register and golden case outline
 
-Status: Core worked examples and the FCR/profit definitions below were approved by the product owner on 2026-10-12. Values are illustrative and approved. Use exact decimal arithmetic and fixed precision in implementation. Remaining edge-case interpretations are called out per formula and need resolution before implementation.
+Status: Core worked examples and the FCR/profit definitions below were approved by the product owner on 2026-10-12. Confirmed edge-case rules F1–F6 below resolve the previously open bird-ledger, mortality, weight/FCR as-of, and buyer-credit cases. Use exact decimal arithmetic and fixed precision in implementation.
 
 ## 1. Remaining birds (D2)
 
@@ -8,7 +8,7 @@ Status: Core worked examples and the FCR/profit definitions below were approved 
 
 **Worked example:** Start with 5,000 placed birds. Record 30 deaths, 5 culled, 100 sold, 20 transferred out, and 10 transferred in. `5,000 - 30 - 5 - 100 - 20 + 10 = 4,855 birds remaining`.
 
-**Still to define:** how transfer events are represented between flocks without double counting. The worked arithmetic is approved.
+**Transfer status (T1):** bird transfers are deferred to v1.1. The ledger formula remains reserved. Until then, live dashboard totals exclude transfers. When transfers are added, represent them as paired transfer-out and transfer-in events; transfers in count in the destination flock's opening birds for that date.
 
 ## 2. Mortality and total loss (D5)
 
@@ -20,21 +20,21 @@ Status: Core worked examples and the FCR/profit definitions below were approved 
 
 **Worked example:** A flock placed 5,000; cumulative deaths are 40, so `40 / 5,000 × 100 = 0.8%`. If 4,900 birds were alive at the start of a week and 14 die in it, weekly mortality is `14 / 4,900 × 100 ˜ 0.2857%`. If 6 birds were culled that week, total losses for the week are `14 + 6 = 20 birds` (not 20 deaths).
 
-**Still to define:** period-start live-count handling for same-day placement, transfers, or sales and display precision. The worked arithmetic is approved.
+**Period and ordering rule (F1/F2):** the denominator is the opening birds of the first day in the period. Within each day, apply mortality, culling, transfers out (reserved), and then sales at end of day. Same-day sales do not change that day's mortality denominator. Culling is excluded from mortality percentage and included in total loss.
 
 ## 3. Running and final raw FCR (D6)
 
 **Approved common structure:** `FCR = cumulative feed consumed (kg) / net live-weight gain (kg)`.
 
-**Approved running denominator:** `current live biomass + cumulative sold live weight + recorded dead-bird biomass - placement biomass`. Current live biomass uses latest sampled average weight × birds alive, as D6 requires.
+**Approved running denominator:** `unsold closing live biomass + cumulative sold live weight + cumulative dead- and culled-bird biomass - placement biomass`. Unsold closing live biomass uses closing birds × the average weight for the selected as-of day. Transfers are not part of FCR in v1.
 
-**Approved final denominator:** `total sold live weight + recorded dead-bird biomass - placement biomass`, following “final FCR uses total sold live weight,” including dead-bird weight and subtracting placement weight. This assumes flock close/final calculation after all sale weight is recorded.
+**Approved final denominator:** `total sold live weight + cumulative dead- and culled-bird biomass - placement biomass`. Closed flocks use final FCR based on total sold weight. Transfers are not part of FCR in v1.
 
 **Worked running example:** 12,000 kg feed; 4,000 birds alive at 1.2 kg average (= 4,800 kg); 500 kg sold live weight; 120 kg recorded dead-bird biomass; 500 kg placement biomass (5,000 chicks × 0.1 kg). Net gain is `4,800 + 500 + 120 - 500 = 4,920 kg`; running FCR is `12,000 / 4,920 ˜ 2.439`.
 
 **Worked final example:** 14,000 kg feed; 6,200 kg total sold live weight; 150 kg recorded dead-bird biomass; 500 kg placement biomass. Net gain is `6,200 + 150 - 500 = 5,850 kg`; final FCR is `14,000 / 5,850 ˜ 2.393`.
 
-**Owner-approved formula; edge cases remain:** The approved worked denominator includes current biomass, sold live weight, recorded dead-bird biomass, and placement biomass as shown. Culls, transfers, unsold closing biomass at finalization, missing dead-bird weights, partial-sale weights, and feed/weight cut-off dates still need rules before implementation. The example assumes recorded dead weight and excludes culls/transfers.
+**Weight sampling and as-of rules (F3/F5):** interpolate linearly between sampled weights, using placement weight as day 0. After the last sample, carry that sample forward and flag the figure as estimated. If no weight sample exists, FCR is unavailable (`null`), never zero. Use only facts dated on or before the selected as-of date. A backdated entry recomputes everything after its date.
 
 ## 4. Feed stock (D7)
 
@@ -48,7 +48,7 @@ Status: Core worked examples and the FCR/profit definitions below were approved 
 
 D8 specifies separation and cost allocation, but not all report conventions. The product owner approved the revenue-minus-cost structure and bird-days allocation below.
 
-**Approved direct/farm cost allocation:** `farm cost allocated to flock = farm-level cost × (flock birds × flock days) / sum across eligible flocks (birds × days)`. Eligible flock set, bird-count basis, and allocation period remain to be specified; do not invent them in code.
+**Approved direct/farm cost allocation:** `farm cost allocated to flock = farm-level cost × (flock birds × flock days) / sum across eligible flocks (birds × days)`. Each farm expense selects its eligible flocks and inclusive farm-local date interval (ADR 0010). Bird-days are the sum of each included day's opening live count; same-day mortality, culling, and sales affect the following day's bird-days.
 
 **Approved estimated profit:** `current live biomass × latest applicable entered market price - direct costs - allocated farm costs`, where `current live biomass = birds alive × latest average weight` and entered market price is PKR/kg. The market-price event is effective-dated; the newest applicable event is used for the selected estimate date.
 
@@ -66,9 +66,44 @@ D8 specifies separation and cost allocation, but not all report conventions. The
 
 **Worked example (approved):** Buyer has two sales of PKR 120,000 and PKR 80,000, and payments of PKR 100,000 and PKR 25,000. Outstanding is `120,000 + 80,000 - 100,000 - 25,000 = PKR 75,000`.
 
-**Still to define:** payment event/aggregate representation, overpayments or credit balances, and whether sales amount must equal weight × rate or may be separately entered.
+**Credit and sale amount rule (F6):** payments remain separate events. Sale amount is stored independently of weight × rate. Negative buyer balances are displayed as `Credit in favour of buyer`; they do not auto-settle in v1. Dashboard outstanding sums only positive buyer balances and shows credits separately.
 
-**Phase 8 implementation note (ADR 0009):** receipts are separate tenant-scoped events; sale amount is stored independently from weight × rate; the API currently reports the formula's raw result, so overpayments produce a negative buyer balance. Treat negative balances as credit operationally until the product owner confirms their display/settlement rule.
+**Phase 8 implementation note (ADR 0009):** receipts are separate tenant-scoped events and sale amount is stored independently from weight × rate. Apply F6 when presenting buyer balances and dashboard totals.
+
+## Confirmed worked examples (F1–F6)
+
+The following rules and worked examples are confirmed product-wide. Keep each worked example exactly as written when implementing or updating this register.
+
+### F1 — Within-day bird order and closing count
+
+Order within a day: opening birds, then mortality, culling, transfers out (reserved), then sales at end of day.
+   closing = opening - mortality - culling - transfers out + transfers in - sold.
+   Example: opening 1,000; mortality 5; culling 2; sold 300 -> closing 693. Daily mortality % = 5 / 1,000 = 0.5000%.
+
+### F2 — Period and cumulative mortality
+
+Period mortality % = deaths in the period / birds alive at the START of the period (opening birds of the first day). Same-day sales happen at end of day, so they never change that day's denominator. Culling is excluded from mortality % but included in total loss.
+   Example: week starts with 4,900 birds alive; 21 deaths in the week -> 21 / 4,900 = 0.4286%. Cumulative: 149 deaths / 5,000 placed = 2.9800%.
+
+### F3 — Average weight and unavailable FCR
+
+Average weight on any day: linear interpolation between sampled weights, with the placement weight as day 0. After the last sample, carry the last sample forward (no extrapolation) and flag the figure as estimated. If no weight sample exists yet, FCR is 'unavailable' (null), never 0.
+   Example: samples day 7 = 0.185 kg and day 14 = 0.465 kg. Day 10 = 0.185 + (0.465 - 0.185) x 3/7 = 0.305 kg.
+
+### F4 — Weight gain and running FCR biomass
+
+Dead and culled birds count in the weight gain at that day's average weight (F3). Unsold closing birds count at closing birds x average weight. Transfers are not part of FCR in v1.
+   Example: placed 1,000 at 0.040 kg; day 14 closing 985 birds; average weight 0.465; cumulative dead/culled weight 3.000 kg; sold 0; cumulative feed 600 kg.
+   Live weight = 985 x 0.465 = 458.025. Gain = 458.025 + 0 + 3.000 - (1,000 x 0.040 = 40.000) = 421.025 kg. FCR = 600 / 421.025 = 1.425.
+
+### F5 — As-of date and closed-flock FCR
+
+As-of date: use only facts dated on or before it. A backdated entry recomputes everything after its date. Closed flocks use the final FCR (total sold weight).
+
+### F6 — Buyer balance and dashboard outstanding
+
+Buyer balance = sales - payments. If negative, display 'Credit in favour of buyer', no auto-settlement in v1. The dashboard outstanding total sums only positive balances; credits are shown separately.
+   Example: sales 100,000; payments 120,000 -> balance -20,000 -> shown as 'Credit in favour of buyer: PKR 20,000'; it does not reduce other buyers' outstanding.
 
 ## Golden case outline: 5,000 broilers over 35 days
 

@@ -47,6 +47,9 @@ export default function AppShell({ children }: AppShellProps) {
               ...(role === 'owner' || role === 'manager' || role === 'accountant'
                 ? [{ to: '/reports', label: 'nav.reports' }]
                 : []),
+              ...(role === 'owner' || role === 'manager' || role === 'accountant'
+                ? [{ to: '/finance', label: 'nav.finance' }]
+                : []),
             ].map((item) => (
               <NavLink
                 key={item.to}
@@ -71,6 +74,9 @@ export default function AppShell({ children }: AppShellProps) {
             : []),
           ...(role === 'owner' || role === 'manager' || role === 'accountant'
             ? [{ to: '/reports', label: 'nav.reports' }]
+            : []),
+          ...(role === 'owner' || role === 'manager' || role === 'accountant'
+            ? [{ to: '/finance', label: 'nav.finance' }]
             : []),
         ].map((item) => (
           <NavLink key={item.to} to={item.to} end={item.to === '/'}>

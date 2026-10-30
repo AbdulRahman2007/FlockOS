@@ -1,41 +1,31 @@
 # Phase plan
 
-Each phase is sequential. Do not start the next phase until its exit test passes and the product owner says go. Phase numbering follows the owner's current task sequence.
+Phases are numbered in the sequence used for the product work. Do not begin the next phase until its exit test passes and the product owner says go.
 
 | Phase | Outcome | Exit test |
 |---|---|---|
-| 0 â€” Product package | Requirements, roles, scope, formulas, risks, and plan | Passed by the owner's explicit confirmation on 2026-10-12. P1 and core worked formula examples are approved; P2 was confirmed in Phase 3; P3-P6 remain documented proposals. |
-| 1 â€” Design package | System diagram, module boundaries, ERD, role-aware API outline, ADRs, mobile wireframes, design tokens/navigation, traceability | Passed by owner approval of the ERD, API outline, and wireframes on 2026-10-12; traceability maps every MVP requirement to persistence, endpoint, and screen/build surface. |
-| 2 â€” Platform foundation | Monorepo setup, PostgreSQL Compose, environment config, toolchains, test harnesses, empty Alembic baseline, structured logging, health/readiness, CI, scripts, i18n, responsive route-split shell | Fresh clone starts local PostgreSQL, API, and frontend using README commands; Alembic baseline applies; CI checks are green; health and readiness tests pass. |
-| 3 - Tenant and identity foundation | Database/migrations, tenant context, authentication, roles, audit primitives | Identity schema migrated successfully; cross-tenant repository and API tests, route permission coverage, and the authorization matrix pass; mypy and Ruff pass. |
-| 4 â€” Farm operations vertical slice | Farm/shed/flock setup, placement, daily records, weights, edits, close/reopen | End-to-end authorized flow records a flock through daily entries and a weight sample; idempotent retry creates one record; gaps are flagged; audit/recompute works; negative closing count rejected; allowed/denied role tests pass. |
-| 5 â€” Domain foundation | Pure calculation module and verified fact-to-total rules | Table-driven and property-based tests cover birds, mortality, FCR, stock, costs/profit, and buyer balances; owner-approved 5,000-bird/35-day candidate matches the approved corrected outputs under A1-A9; domain coverage is at least 95%; domain imports no framework/database/HTTP code. |
-| 6 â€” Daily operations and mobile entry | Idempotent daily records, edit/recompute, feed purchases and use, weekly weights, mobile entry | Mobile Playwright flow submits in six taps; duplicate submit creates one row; backdated edits recompute counts; role windows pass; report measured submit p95. |
-| 7 â€” Sales, expenses, and derived finance | Partial sales/payments, expenses, approved profit outputs | PostgreSQL integration and domain consistency tests reconcile finance facts; edits are audited; buyer outstanding and estimated/actual profit match approved examples; authorization tests pass. |
-| 8 â€” Dashboards, reports, and alerts | Operational/finance views, paginated reports, configurable alerts | Realistic dataset shows read p95 <300 ms and dashboard p95 <500 ms; list query-count tests show no N+1 growth; dashboard query plans avoid full-table scans; pagination and alert thresholds validated. |
-| 9 â€” Mobile-first workflows | Accessible management flows, drafts/retries, user-facing states | Vitest/RTL and Playwright flows pass; touch targets â‰¥44 px; failed submissions preserve input; i18n/RTL structure is used; initial JS <200 KB gzipped; measured LCP <2.5 s and Lighthouse mobile performance/accessibility â‰¥90 or gaps explicitly approved. |
-| 10 â€” Release readiness | Production deployment, observability, backup/restore, security and performance evidence | Ruff, ESLint, type checks, builds, full test suite, authorization matrix, cross-tenant suite, restore rehearsal, secret scan, CORS/auth review, measured latency/Lighthouse results, hosting, and backup policy are approved. |
+| 0 — Product package | Requirements, roles, scope, formulas, risks, and plan | Owner approval. Passed on 2026-10-12; later confirmations are listed in `decisions.md` and `formulas.md`. |
+| 1 — Design package | System diagram, module boundaries, ERD, role-aware API outline, ADRs, mobile wireframes, design tokens/navigation, traceability | Owner approval of ERD, API outline, and wireframes; traceability covers MVP requirements. Passed on 2026-10-12. |
+| 2 — Platform foundation | Monorepo, PostgreSQL Compose, environment configuration, toolchains, test harnesses, Alembic baseline, logging, health/readiness, CI, scripts, i18n, responsive route-split shell | Fresh clone starts PostgreSQL, API, and frontend; migrations apply; CI and health/readiness checks pass. The repository contains this foundation, but a dated exit result is not recorded here. |
+| 3 — Tenant and identity foundation | Database/migrations, tenant context, authentication, roles, audit primitives | Identity migration applies; cross-tenant and authorization checks pass; mypy and Ruff pass. Passed on 2026-10-16. Invite-only onboarding is confirmed; invitation delivery remains a deployment seam. |
+| 4 — Farm operations vertical slice | Farm/shed/flock setup, placement, daily records, weights, edits, close/reopen | Authorized end-to-end flock workflow, idempotent daily entry, gap flags, audit/recompute, negative-count rejection, and role checks pass. Implementation evidence exists in later phase checks; a separate Phase 4 exit result is not recorded here. |
+| 5 — Domain foundation | Pure calculations and verified fact-to-total rules | Table/property tests and approved 5,000-bird candidate pass at 95%+ domain coverage. Candidate assumptions A1–A9 and corrected outputs approved 2026-10-23; focused checks recorded 95.69% coverage. PostgreSQL integration requires `TEST_DATABASE_URL`. |
+| 6 — Daily operations and mobile entry | Idempotent daily records, edit/recompute, feed purchases/use, weekly weights, mobile entry | Mobile entry, duplicate submission, backdated recompute/audit, role windows, and quality checks pass. Local checks passed 2026-10-26; 2 PostgreSQL integration checks were skipped without `TEST_DATABASE_URL`. The 57.14 ms submit p95 used in-memory SQLite and is not a production latency result. |
+| 7 — Dashboards and alerts | Operational dashboard, projections, configurable operational alerts | Realistic data: read p95 below 300 ms, dashboard p95 below 500 ms, no N+1 growth, indexed query plans, pagination, and configured alert thresholds. Local synthetic p95 evidence is recorded in ADR 0012: farms 230.49 ms, flocks 182.41 ms, dashboard 463.41 ms. Full exit-test status is not recorded. |
+| 8 — Finance | Sales, payments, expenses, supplier links, derived and separately labelled profit | PostgreSQL/domain consistency, audit, buyer balances, estimated/actual profit examples, and authorization checks pass. Finance implementation conventions are recorded in ADRs 0009–0010; a complete Phase 8 exit result is not recorded. |
+| 9 — Reports | Paginated operational/finance reports and CSV/PDF exports | Role/tenant-scoped reports, filters, pagination, export memory/runtime budget, and query performance pass. Report decisions are in ADR 0011; a complete Phase 9 exit result is not recorded. |
+| 10 — Release readiness | Production deployment, observability, backup/restore, security, and performance evidence | Ruff, ESLint, type checks, builds, full tests, authorization/cross-tenant checks, restore rehearsal, secret scan, CORS/auth review, measured latency/Lighthouse, hosting, and backup policy are approved. Not complete: `security.md` lists open release gates; local synthetic measurements do not establish hosted performance. |
+| 11 — Deployment | Production configuration and HTTPS, OCI images, release migrations, managed PostgreSQL backups, staging/custom domain, monitoring, tenant provisioning, and rollback | Main deploys to staging then production; restore into a fresh database and rollback are rehearsed; health/uptime alerts fire in a test. In progress: portable artifacts are present, but hosting/database provider, domains, secrets, hosted error tracking, and rehearsals are not configured. See `docs/deployment/phase11.md`. |
+| 12 — Release and business readiness | Operational readiness, customer support, launch controls, and first-client readiness | To be defined with the owner after Phase 11 passes. Not started. |
 
-## Phase 0 status
+## Recorded approvals and status
 
-The owner explicitly marked Phase 0 passed on 2026-10-12. The Phase 5 candidate fixture and its A1-A9 assumptions/corrections were approved on 2026-10-23. The fixture is synthetic and does not cover missing-day behavior.
-
-## Phase 1 status
-
-The owner approved the ERD, API outline, and wireframes on 2026-10-12. Phase 1 is passed.
-
-## Phase 1 decisions and remaining formula assumptions
-
-The owner resolved four Phase 1 design points: record dead-bird weights separately; use liters and °C for water and temperature; estimate revenue from current live biomass (birds alive × latest average weight) at the latest applicable entered market price; and return a stale dashboard snapshot with its as-of time. Phase 5 candidate-specific assumptions are recorded in `formulas.md`.
-
-## Phase 5 status
-
-The owner approved candidate-specific assumptions A1-A9 and corrected expected outputs on 2026-10-23. The focused domain suite, import-lint, table/property tests, and candidate regression pass with 95.69% domain coverage. PostgreSQL integration tests require `TEST_DATABASE_URL`.
-
-## Phase 6 status
-
-Local Phase 6 exit checks passed on 2026-10-26. The backend suite reports 62 passed and 2 PostgreSQL integration checks skipped because `TEST_DATABASE_URL` is not configured; domain calculation coverage is 95.19%. Mobile Playwright checks passed at a 390×844 viewport: a normal full-day entry takes six actions, and a separate double-click check sends one create request. Backend tests verified one stored row on duplicate submission, backdated recomputation/audit, and role edit windows. Submit p95 measured 57.14 ms for 15 requests through local TestClient with in-memory SQLite. This is a local harness measurement, not a production latency result. Ruff, mypy, frontend Vitest, ESLint, type-check, build, and the focused Playwright run pass. Review the skipped PostgreSQL checks with a configured test database before production sign-off; Phase 7 remains gated on the owner's go-ahead.
-
-## Phase 3 status
-
-Tenant identity foundation passed on 2026-10-16: migration applied, mypy passed, 15 backend tests passed, Ruff lint and format passed. Invite-only onboarding is confirmed by the Phase 3 task; invitation delivery remains a deployment seam.
+- **Phase 0:** Passed by owner on 2026-10-12. The Phase 5 candidate fixture and its A1–A9 assumptions/corrections were approved on 2026-10-23. The fixture is synthetic and does not cover missing-day behavior.
+- **Phase 1:** Passed by owner on 2026-10-12.
+- **Phase 3:** Passed on 2026-10-16: identity migration applied, mypy passed, 15 backend tests passed, and Ruff lint/format passed. Invite-only onboarding was confirmed during this phase.
+- **Phase 5:** Approved candidate and focused domain results are recorded above. This approval is for that synthetic candidate and does not settle product-wide formula edge cases.
+- **Phase 6:** Local exit checks passed on 2026-10-26 with the PostgreSQL integration skips and local-only latency limitation noted above.
+- **Phase 7:** ADR 0012 records local synthetic p95 measurements at 16 workers and 50 requests per endpoint. Full dashboard/alert exit evidence is not recorded as passed.
+- **Phase 8:** Finance implementation decisions exist in ADRs 0009–0010. Full exit evidence is not recorded as passed.
+- **Phase 9:** Report implementation decisions exist in ADR 0011. Full exit evidence is not recorded as passed.
+- **Phase 10:** In progress; do not treat as passed while release gates remain open.

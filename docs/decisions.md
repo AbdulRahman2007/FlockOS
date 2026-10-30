@@ -15,11 +15,12 @@ D11 Online-only in v1. The form keeps drafts and retries on failure. Offline syn
 D12 Sales: partial sales allowed. Fields: buyer, date, birds, total weight, rate per kg, amount, amount paid. Outstanding = sales - payments per buyer.
 D13 Suppliers: a simple list linked to feed purchases and expenses. No payables ledger yet.
 D14 In-app alerts: high mortality %, missing daily record, low feed cover, FCR worse than target. Thresholds configurable. Vaccination alerts deferred.
+P3  One tenant per user. Owner sees all farms in the tenant. Managers and Workers are assigned to one or more farms and see only those. Accountant sees finance across the tenant and is view-only on operations.
+P4  Super Admin has no access to tenant business data. A time-limited, logged support-access feature may be added later; it is NOT in v1.
+P5  Production uses a paid managed PostgreSQL with automated daily backups and a tested restore. The provider is NOT chosen yet: do not select one; provider terms are verified at selection time.
+P6  Design and load-test target: 100 tenants and 1,000 users.
+T1  Bird transfers are DEFERRED to v1.1. Keep the ledger formula reserved; the dashboard note that live totals exclude transfers stays. When added: paired transfer-out and transfer-in events, and transfers in count in the destination flock's opening birds for that date.
 
 PROPOSED (not yet confirmed: ask me before treating as final)
 P1  Roles. Super Admin: tenants and system health only. Owner: everything inside own tenant. Manager: operations, sales, expenses, close flocks and view audit log on assigned farms. Worker: same-day daily records, weights and feed use; no money screens. Accountant: sales, payments, expenses, finance dashboard and reports; view-only on operations.
 P2  Invite-only accounts. Super Admin creates the owner; the owner invites everyone else. No public signup in v1.
-P3  A user belongs to exactly one tenant. Managers and workers are assigned to specific farms.
-P4  Super Admin has no access to tenant business data by default.
-P5  Hosting: free tiers for dev and demo; a paid managed Postgres with daily backups for any real client data. Check current provider terms.
-P6  Design target: 100 tenants and 1,000 users. Load-test beyond year-one volume.

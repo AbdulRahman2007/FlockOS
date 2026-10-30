@@ -279,7 +279,12 @@ def create_tenant(
         new_value=tenant.name,
     )
     db.commit()
-    return InviteResponse(invitation_id=str(invitation.id), invite_token=token, expires_in=604800)
+    return InviteResponse(
+        invitation_id=str(invitation.id),
+        invite_token=token,
+        expires_in=604800,
+        tenant_id=str(tenant.id),
+    )
 
 
 @router.get("/tenants", response_model=list[TenantSummary])

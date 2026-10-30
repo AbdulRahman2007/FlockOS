@@ -10,7 +10,14 @@ from sqlalchemy.orm import Session
 from app.api.v1.farm_access import require_farm_scope, tenant_repository
 from app.core.authz import Principal, Role, get_db, require_permission
 from app.domain.farm_rules import close_flock, reopen_flock, validate_placement
-from app.models.farm_operations import Flock, FlockPlacement, Shed, TenantSettings
+from app.domain.calculations import DEFAULT_TARGET_WEIGHT_CURVE
+from app.models.farm_operations import (
+    Flock,
+    FlockPlacement,
+    Shed,
+    TenantSettings,
+    TenantWeightTarget,
+)
 from app.repositories.farm_operations import FarmOperationsRepository
 from app.schemas.farm_operations import (
     FlockCreate,
@@ -27,6 +34,7 @@ from app.schemas.farm_operations import (
     ShedUpdate,
     TenantSettingsRead,
     TenantSettingsUpdate,
+    TenantWeightTargetPoint,
 )
 from app.services.audit import record_audit
 
@@ -464,16 +472,41 @@ def get_settings(
 ) -> TenantSettingsRead:
     repo = tenant_repository(db, principal)
     row = repo.settings()
+    curve_rows = list(
+        db.scalars(
+            select(TenantWeightTarget)
+            .where(TenantWeightTarget.tenant_id == principal.tenant_id)
+            .order_by(TenantWeightTarget.age_day)
+        ).all()
+    )
+    curve = (
+        [
+            TenantWeightTargetPoint(
+                age_day=item.age_day, average_weight_kg=item.average_weight_kg
+            )
+            for item in curve_rows
+        ]
+        if curve_rows
+        else [
+            TenantWeightTargetPoint(
+                age_day=item.age_day, average_weight_kg=item.average_weight_kg
+            )
+            for item in DEFAULT_TARGET_WEIGHT_CURVE
+        ]
+    )
     if row is None:
         return TenantSettingsRead(
             feed_bag_size_kg=None,
             target_mortality_percent=None,
             target_fcr=None,
+            target_weight_curve=curve,
             manager_daily_window_days=7,
             worker_daily_window_days=1,
             updated_at=None,
         )
-    return TenantSettingsRead.model_validate(row, from_attributes=True)
+    return TenantSettingsRead.model_validate(row, from_attributes=True).model_copy(
+        update={"target_weight_curve": curve}
+    )
 
 
 @router.put("/settings", response_model=TenantSettingsRead)
@@ -485,7 +518,8 @@ def update_settings(
     repo = tenant_repository(db, principal)
     row = repo.settings()
     now = datetime.now(UTC)
-    values = data.model_dump()
+    curve = data.target_weight_curve
+    values = data.model_dump(exclude={"target_weight_curve"})
     if row is None:
         row = TenantSettings(
             tenant_id=principal.tenant_id, updated_by=principal.user_id, updated_at=now, **values
@@ -495,6 +529,28 @@ def update_settings(
         for key, value in values.items():
             setattr(row, key, value)
         row.updated_by, row.updated_at = principal.user_id, now
+    if curve is not None:
+        db.query(TenantWeightTarget).filter(
+            TenantWeightTarget.tenant_id == principal.tenant_id
+        ).delete(synchronize_session=False)
+        points = curve or [
+            TenantWeightTargetPoint(
+                age_day=item.age_day, average_weight_kg=item.average_weight_kg
+            )
+            for item in DEFAULT_TARGET_WEIGHT_CURVE
+        ]
+        db.add_all(
+            [
+                TenantWeightTarget(
+                    tenant_id=principal.tenant_id,
+                    age_day=point.age_day,
+                    average_weight_kg=point.average_weight_kg,
+                    updated_by=principal.user_id,
+                    updated_at=now,
+                )
+                for point in points
+            ]
+        )
     record_audit(
         db,
         tenant_id=principal.tenant_id,
@@ -502,7 +558,33 @@ def update_settings(
         action="tenant.settings.update",
         entity_type="tenant_settings",
         entity_id=str(principal.tenant_id),
-        new_value=str(values),
+        new_value=str({**values, "target_weight_curve": curve}),
     )
     _commit(db)
-    return TenantSettingsRead.model_validate(row, from_attributes=True)
+    stored_curve = list(
+        db.scalars(
+            select(TenantWeightTarget)
+            .where(TenantWeightTarget.tenant_id == principal.tenant_id)
+            .order_by(TenantWeightTarget.age_day)
+        ).all()
+    )
+    points = stored_curve or [
+        TenantWeightTarget(
+            tenant_id=principal.tenant_id,
+            age_day=item.age_day,
+            average_weight_kg=item.average_weight_kg,
+            updated_by=principal.user_id,
+            updated_at=now,
+        )
+        for item in DEFAULT_TARGET_WEIGHT_CURVE
+    ]
+    return TenantSettingsRead.model_validate(row, from_attributes=True).model_copy(
+        update={
+            "target_weight_curve": [
+                TenantWeightTargetPoint(
+                    age_day=item.age_day, average_weight_kg=item.average_weight_kg
+                )
+                for item in points
+            ]
+        }
+    )

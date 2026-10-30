@@ -59,9 +59,18 @@ class DashboardTrendPoint(BaseModel):
     target_weight_kg: Decimal | None = None
 
 
+class DashboardFarmFeedStock(BaseModel):
+    farm_id: UUID
+    farm_name: str
+    stock_kg: Decimal | None
+    feed_cover_days: Decimal | None
+    status: str
+
+
 class DashboardRead(BaseModel):
     as_of: date
     metrics: dict[str, DashboardMetric]
     alerts: list[DashboardAlert]
     trends: list[DashboardTrendPoint]
+    feed_stock_by_farm: list[DashboardFarmFeedStock] = Field(default_factory=list)
     empty: bool

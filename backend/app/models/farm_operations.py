@@ -168,6 +168,30 @@ class TenantSettings(Base):
             "target_fcr IS NULL OR target_fcr > 0", name="ck_tenant_settings_fcr_positive"
         ),
         CheckConstraint(
+            "high_daily_mortality_percent BETWEEN 0 AND 100",
+            name="ck_tenant_settings_daily_mortality_percent",
+        ),
+        CheckConstraint(
+            "early_daily_mortality_percent BETWEEN 0 AND 100",
+            name="ck_tenant_settings_early_mortality_percent",
+        ),
+        CheckConstraint(
+            "early_mortality_days BETWEEN 1 AND 30",
+            name="ck_tenant_settings_early_mortality_days",
+        ),
+        CheckConstraint(
+            "feed_cover_threshold_days > 0",
+            name="ck_tenant_settings_feed_cover_threshold_positive",
+        ),
+        CheckConstraint(
+            "feed_cover_usage_window_days BETWEEN 1 AND 30",
+            name="ck_tenant_settings_feed_cover_window",
+        ),
+        CheckConstraint(
+            "fcr_tolerance_percent BETWEEN 0 AND 100",
+            name="ck_tenant_settings_fcr_tolerance_percent",
+        ),
+        CheckConstraint(
             "manager_daily_window_days BETWEEN 1 AND 30",
             name="ck_tenant_settings_manager_daily_window",
         ),
@@ -183,8 +207,49 @@ class TenantSettings(Base):
     feed_bag_size_kg: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
     target_mortality_percent: Mapped[Decimal | None] = mapped_column(Numeric(6, 3))
     target_fcr: Mapped[Decimal | None] = mapped_column(Numeric(8, 3))
+    high_daily_mortality_percent: Mapped[Decimal] = mapped_column(
+        Numeric(6, 3), nullable=False, default=Decimal("0.5")
+    )
+    early_daily_mortality_percent: Mapped[Decimal] = mapped_column(
+        Numeric(6, 3), nullable=False, default=Decimal("1.0")
+    )
+    early_mortality_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7)
+    feed_cover_threshold_days: Mapped[Decimal] = mapped_column(
+        Numeric(6, 2), nullable=False, default=Decimal("3")
+    )
+    feed_cover_usage_window_days: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    fcr_tolerance_percent: Mapped[Decimal] = mapped_column(
+        Numeric(6, 3), nullable=False, default=Decimal("5")
+    )
     manager_daily_window_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7)
     worker_daily_window_days: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    updated_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TenantWeightTarget(Base):
+    __tablename__ = "tenant_weight_targets"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "updated_by"],
+            ["users.tenant_id", "users.id"],
+            ondelete="RESTRICT",
+            name="fk_tenant_weight_target_tenant_updated_by",
+        ),
+        CheckConstraint("age_day > 0", name="ck_tenant_weight_target_age_positive"),
+        CheckConstraint(
+            "average_weight_kg > 0", name="ck_tenant_weight_target_weight_positive"
+        ),
+        UniqueConstraint("tenant_id", "age_day", name="uq_tenant_weight_target_age"),
+        Index("ix_tenant_weight_targets_tenant_age", "tenant_id", "age_day"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    age_day: Mapped[int] = mapped_column(Integer, nullable=False)
+    average_weight_kg: Mapped[Decimal] = mapped_column(Numeric(8, 3), nullable=False)
     updated_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

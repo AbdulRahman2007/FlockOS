@@ -23,6 +23,7 @@ class InviteResponse(BaseModel):
     invitation_id: str
     invite_token: str
     expires_in: int
+    tenant_id: str | None = None
 
 
 class CreateTenantRequest(BaseModel):

@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import AppShell from '../layouts/AppShell';
 import LoginPage from '../pages/LoginPage';
 import { useAuth } from '../context/useAuth';
+import { useRole } from '../hooks/useRole';
 
 const DashboardPage = lazy(() => import('../pages/DashboardPage'));
 const FarmsPage = lazy(() => import('../pages/FarmsPage'));
@@ -11,6 +12,7 @@ const FlocksPage = lazy(() => import('../pages/FlocksPage'));
 const DailyEntryPage = lazy(() => import('../pages/DailyEntryPage'));
 const SettingsPage = lazy(() => import('../pages/SettingsPage'));
 const ReportsPage = lazy(() => import('../pages/ReportsPage'));
+const FinancePage = lazy(() => import('../pages/FinancePage'));
 
 function LoadingState() {
   const { t } = useTranslation();
@@ -23,6 +25,7 @@ function LoadingState() {
 
 export default function App() {
   const { ready, authenticated } = useAuth();
+  const role = useRole();
   return (
     <BrowserRouter>
       <Routes>
@@ -49,6 +52,16 @@ export default function App() {
                     <Route path="/daily" element={<DailyEntryPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/reports" element={<ReportsPage />} />
+                    <Route
+                      path="/finance"
+                      element={
+                        role === 'owner' || role === 'manager' || role === 'accountant' ? (
+                          <FinancePage />
+                        ) : (
+                          <Navigate to="/" replace />
+                        )
+                      }
+                    />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Suspense>

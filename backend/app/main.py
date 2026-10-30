@@ -15,6 +15,7 @@ from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.farm_resources import router as farm_resources_router
 from app.api.v1.farms import router as farms_router
 from app.api.v1.finance import router as finance_router
+from app.api.v1.feed_stock import router as feed_stock_router
 from app.api.v1.reports import router as reports_router
 from app.core.authz import public_operation
 from app.core.config import get_settings
@@ -67,6 +68,7 @@ app.include_router(farm_resources_router, prefix="/api/v1")
 app.include_router(daily_records_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(finance_router, prefix="/api/v1")
+app.include_router(feed_stock_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
 
 

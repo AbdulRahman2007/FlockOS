@@ -1,0 +1,42 @@
+name: Staging uptime
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: Send a test alert through the configured webhook
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-uptime
+  cancel-in-progress: true
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+      UPTIME_ALERT_WEBHOOK: ${{ secrets.UPTIME_ALERT_WEBHOOK }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check staging and alert on failure
+        shell: bash
+        env:
+          SIMULATE_FAILURE: ${{ inputs.simulate_failure }}
+        run: |
+          if [[ "$SIMULATE_FAILURE" == "true" ]]; then
+            python scripts/uptime_check.py --base-url "$STAGING_BASE_URL" --simulate-failure
+          else
+            python scripts/uptime_check.py --base-url "$STAGING_BASE_URL"
+          fi

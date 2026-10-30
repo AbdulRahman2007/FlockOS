@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Page[T](BaseModel):
@@ -152,6 +152,11 @@ class FlockStatusRead(BaseModel):
     locked: bool
 
 
+class TenantWeightTargetPoint(BaseModel):
+    age_day: int = Field(gt=0, le=500)
+    average_weight_kg: Decimal = Field(gt=0, max_digits=8, decimal_places=3)
+
+
 class TenantSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -160,14 +165,36 @@ class TenantSettingsUpdate(BaseModel):
         default=None, ge=0, le=100, max_digits=6, decimal_places=3
     )
     target_fcr: Decimal | None = Field(default=None, gt=0, max_digits=8, decimal_places=3)
+    high_daily_mortality_percent: Decimal = Field(default=Decimal("0.5"), ge=0, le=100)
+    early_daily_mortality_percent: Decimal = Field(default=Decimal("1.0"), ge=0, le=100)
+    early_mortality_days: int = Field(default=7, ge=1, le=30)
+    feed_cover_threshold_days: Decimal = Field(default=Decimal("3"), gt=0)
+    feed_cover_usage_window_days: int = Field(default=3, ge=1, le=30)
+    fcr_tolerance_percent: Decimal = Field(default=Decimal("5"), ge=0, le=100)
+    target_weight_curve: list[TenantWeightTargetPoint] | None = None
     manager_daily_window_days: int = Field(default=7, ge=1, le=30)
     worker_daily_window_days: int = Field(default=1, ge=1, le=30)
+
+    @model_validator(mode="after")
+    def unique_curve_ages(self) -> "TenantSettingsUpdate":
+        if self.target_weight_curve is not None and len(
+            {point.age_day for point in self.target_weight_curve}
+        ) != len(self.target_weight_curve):
+            raise ValueError("Target weight ages must be unique")
+        return self
 
 
 class TenantSettingsRead(BaseModel):
     feed_bag_size_kg: Decimal | None
     target_mortality_percent: Decimal | None
     target_fcr: Decimal | None
+    high_daily_mortality_percent: Decimal = Decimal("0.5")
+    early_daily_mortality_percent: Decimal = Decimal("1.0")
+    early_mortality_days: int = 7
+    feed_cover_threshold_days: Decimal = Decimal("3")
+    feed_cover_usage_window_days: int = 3
+    fcr_tolerance_percent: Decimal = Decimal("5")
+    target_weight_curve: list[TenantWeightTargetPoint] = Field(default_factory=list)
     manager_daily_window_days: int = 7
     worker_daily_window_days: int = 1
     updated_at: datetime | None
